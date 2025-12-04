@@ -1,0 +1,32 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Homepage from './pages/Homepage';
+import Pricing from './pages/Pricing';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+import ForgotPassword from './pages/ForgotPassword';
+import JobSearch from './pages/JobSearch';
+import Dashboard from './pages/Dashboard';
+import './index.css';
+
+function App() {
+  return (
+    <Router>
+      <div className="min-h-screen bg-gray-50">
+        <Routes>
+          <Route path="/" element={<Homepage />} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/search" element={<JobSearch />} />
+          <Route path="/jobs" element={<JobSearch />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+export default App;
+

@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+.btn-primary {
+  background-color: #FDB913;
+  color: #1A1A1A;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: #EAA902;
+}
+
+.card {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  border: 1px solid #E5E7EB;
+  padding: 1.5rem;
+}
+
+/* Hide scrollbar for mobile tabs while keeping scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+  /* Chrome, Safari and Opera */
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out forwards;
+}
