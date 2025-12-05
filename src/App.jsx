@@ -7,23 +7,26 @@ import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
 import JobSearch from './pages/JobSearch';
 import Dashboard from './pages/Dashboard';
+import { AuthProvider } from './hooks/useAuth';
 import './index.css';
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Routes>
-          <Route path="/" element={<Homepage />} />
-          <Route path="/pricing" element={<Pricing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/search" element={<JobSearch />} />
-          <Route path="/jobs" element={<JobSearch />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-        </Routes>
-      </div>
+      <AuthProvider>
+        <div className="min-h-screen bg-gray-50">
+          <Routes>
+            <Route path="/" element={<Homepage />} />
+            <Route path="/pricing" element={<Pricing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/search" element={<JobSearch />} />
+            <Route path="/jobs" element={<JobSearch />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+          </Routes>
+        </div>
+      </AuthProvider>
     </Router>
   );
 }

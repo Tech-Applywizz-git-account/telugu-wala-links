@@ -24,17 +24,17 @@ const Navbar = () => {
     };
 
     const handleLogout = async () => {
-        console.log("🚨 Logout button clicked");
+        console.log("🚨 Logout button clicked in Navbar");
 
         // Close dropdowns first
         setShowDropdown(false);
         setIsMenuOpen(false);
 
-        // Call the centralized signOut from AuthContext
+        // Call the centralized signOut from AuthContext (handles all cleanup)
         await signOut();
 
         // Navigate to homepage
-        navigate("/");
+        navigate("/", { replace: true });
     };
 
     const handleDashboardClick = () => {
