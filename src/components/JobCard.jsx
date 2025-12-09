@@ -28,6 +28,8 @@ const JobCard = ({ job, isSaved = false, onSaveToggle }) => {
             return;
         }
 
+        const jobId = job.job_id || job.id;
+
         setSaving(true);
         try {
             if (saved) {
@@ -35,18 +37,18 @@ const JobCard = ({ job, isSaved = false, onSaveToggle }) => {
                     .from('saved_jobs')
                     .delete()
                     .eq('user_id', user.id)
-                    .eq('job_id', job.job_id);
+                    .eq('job_id', jobId);
                 if (error) throw error;
                 setSaved(false);
             } else {
                 const { error } = await supabase
                     .from('saved_jobs')
-                    .insert([{ user_id: user.id, job_id: job.job_id, job_data: job }]);
+                    .insert([{ user_id: user.id, job_id: jobId, job_data: job }]);
 
                 if (error && error.code !== '23505') throw error;
                 setSaved(true);
             }
-            if (onSaveToggle) onSaveToggle(job.job_id, !saved);
+            if (onSaveToggle) onSaveToggle(jobId, !saved);
         } catch (error) {
             console.error('Error toggling save:', error);
         } finally {
@@ -138,8 +140,8 @@ const JobCard = ({ job, isSaved = false, onSaveToggle }) => {
                         onClick={handleSaveToggle}
                         disabled={saving}
                         className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border font-medium text-sm transition-all ${saved
-                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                            ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
                             }`}
                     >
                         {saving ? (

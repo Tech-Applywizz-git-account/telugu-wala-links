@@ -1,14 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapPin, Briefcase, GraduationCap, FileText, Search, X } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
-
-const filterOptions = {
+const defaultOptions = {
     role: ['Software Engineer', 'Product Manager', 'Data Scientist', 'Designer', 'Marketing Manager'],
     location: ['New York, New York', 'Chicago, Illinois', 'San Francisco, California', 'Austin, Texas', 'Boston, Massachusetts'],
     company: ['Google', 'Microsoft', 'Amazon', 'Meta', 'Netflix', 'Tesla'],
     experience: ['Internship', '<1 year', '1-2 years', '3-4 years', '5-7 years', '8-14 years', '15+ years'],
 };
-
 
 const tabs = [
     { id: 'role', label: 'Role', icon: Briefcase },
@@ -16,7 +15,6 @@ const tabs = [
     { id: 'company', label: 'Company', icon: FileText },
     { id: 'experience', label: 'Experience', icon: Briefcase },
 ];
-
 
 const SearchFilters = ({ onFilterChange }) => {
     const [activeTab, setActiveTab] = useState('role');
@@ -27,6 +25,67 @@ const SearchFilters = ({ onFilterChange }) => {
         experience: [],
     });
 
+    const [filterOptions, setFilterOptions] = useState(defaultOptions);
+
+    // Fetch dynamic filter options
+    useEffect(() => {
+        const fetchFilterOptions = async () => {
+            try {
+                // Fetch all unique values
+                const { data, error } = await supabase
+                    .from('job_jobrole_all')
+                    .select('location, company, job_role_name');
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    // Helper to get top frequent items
+                    const getTopItems = (items) => {
+                        const counts = {};
+                        items.forEach(item => {
+                            if (item) {
+                                // Clean up location: "City, State" -> simple trim
+                                const cleanItem = item.trim();
+                                counts[cleanItem] = (counts[cleanItem] || 0) + 1;
+                            }
+                        });
+                        return Object.entries(counts)
+                            .sort((a, b) => b[1] - a[1]) // Sort by frequency desc
+                            .slice(0, 30) // Take top 30
+                            .map(entry => entry[0]);
+                    };
+
+                    const locations = getTopItems(data.map(d => d.location));
+                    const companies = getTopItems(data.map(d => d.company));
+                    // Map job_role_name to role
+                    const roles = getTopItems(data.map(d => d.job_role_name));
+
+                    setFilterOptions(prev => ({
+                        ...prev,
+                        location: locations.length > 0 ? locations : prev.location,
+                        company: companies.length > 0 ? companies : prev.company,
+                        role: roles.length > 0 ? roles : prev.role
+                    }));
+                }
+            } catch (err) {
+                console.error("Error fetching filter options:", err);
+            }
+        };
+
+        fetchFilterOptions();
+    }, []);
+
+
+    const [showLocationInput, setShowLocationInput] = useState(false);
+    const [customLocation, setCustomLocation] = useState('');
+
+    const handleCustomLocationSubmit = (e) => {
+        if (e.key === 'Enter' && customLocation.trim()) {
+            toggleFilter('location', customLocation.trim());
+            setCustomLocation('');
+            setShowLocationInput(false);
+        }
+    };
 
     const toggleFilter = (category, value) => {
         setActiveFilters(prev => {
@@ -90,7 +149,8 @@ const SearchFilters = ({ onFilterChange }) => {
                 {/* Pills */}
                 <div className="py-4 overflow-x-auto">
                     <div className="flex flex-wrap gap-2 justify-center">
-                        {filterOptions[activeTab].map(option => {
+                        {/* Show only top 5 for location, all for others */}
+                        {(activeTab === 'location' ? filterOptions[activeTab].slice(0, 5) : filterOptions[activeTab]).map(option => {
                             const isSelected = isFilterActive(activeTab, option);
                             return (
                                 <button
@@ -108,10 +168,40 @@ const SearchFilters = ({ onFilterChange }) => {
 
 
                         {activeTab === 'location' && (
-                            <button className="inline-flex items-center gap-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full text-sm font-medium shadow-sm cursor-pointer transition-all border border-gray-200">
-                                <Search size={14} />
-                                <span>Search for all other locations</span>
-                            </button>
+                            showLocationInput ? (
+                                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-purple-500 rounded-full shadow-sm">
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        value={customLocation}
+                                        onChange={(e) => setCustomLocation(e.target.value)}
+                                        onKeyDown={handleCustomLocationSubmit}
+                                        onBlur={() => setShowLocationInput(false)}
+                                        placeholder="Type location..."
+                                        className="outline-none text-sm text-gray-700 w-40"
+                                    />
+                                    {customLocation && (
+                                        <button onMouseDown={(e) => {
+                                            e.preventDefault(); // Prevent blur
+                                            if (customLocation.trim()) {
+                                                toggleFilter('location', customLocation.trim());
+                                                setCustomLocation('');
+                                                setShowLocationInput(false);
+                                            }
+                                        }}>
+                                            <Search size={14} className="text-purple-600" />
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setShowLocationInput(true)}
+                                    className="inline-flex items-center gap-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full text-sm font-medium shadow-sm cursor-pointer transition-all border border-gray-200"
+                                >
+                                    <Search size={14} />
+                                    <span>Search for all other locations</span>
+                                </button>
+                            )
                         )}
                     </div>
                 </div>

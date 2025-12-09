@@ -206,80 +206,90 @@ export default function AdminControls() {
                 <th className="px-6 py-4">Role</th>
                 <th className="px-6 py-4">Payment Status</th>
                 <th className="px-6 py-4 text-right">Joined</th>
+                <th className="px-6 py-4 text-right">End Date</th>
                 <th className="px-6 py-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {loadingUsers ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
                     <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500" />
                     Loading users...
                   </td>
                 </tr>
               ) : paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
                     No users found matching your search.
                   </td>
                 </tr>
               ) : (
-                paginatedUsers.map((u) => (
-                  <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">
-                        {u.first_name} {u.last_name}
-                      </div>
-                      <div className="text-gray-500 text-xs mt-0.5">{u.email}</div>
-                      {u.mobile_number && (
-                        <div className="text-gray-400 text-xs mt-0.5">
-                          {u.country_code} {u.mobile_number}
+                paginatedUsers.map((u) => {
+                  const joinedDate = new Date(u.created_at);
+                  const endDate = new Date(joinedDate);
+                  endDate.setMonth(endDate.getMonth() + 1);
+
+                  return (
+                    <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">
+                          {u.first_name} {u.last_name}
                         </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <select
-                        className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${u.role === 'admin'
+                        <div className="text-gray-500 text-xs mt-0.5">{u.email}</div>
+                        {u.mobile_number && (
+                          <div className="text-gray-400 text-xs mt-0.5">
+                            {u.country_code} {u.mobile_number}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <select
+                          className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${u.role === 'admin'
                             ? 'bg-purple-100 text-purple-700'
                             : 'bg-gray-100 text-gray-700'
-                          }`}
-                        value={u.role || 'user'}
-                        onChange={(e) => updateUserRole(u.id, e.target.value)}
-                      >
-                        <option value="user">User</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    </td>
-                    <td className="px-6 py-4">
-                      <select
-                        className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${u.payment_status === 'completed' || u.has_paid
+                            }`}
+                          value={u.role || 'user'}
+                          onChange={(e) => updateUserRole(u.id, e.target.value)}
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                      <td className="px-6 py-4">
+                        <select
+                          className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${u.payment_status === 'completed' || u.has_paid
                             ? 'bg-green-100 text-green-700'
                             : 'bg-yellow-100 text-yellow-700'
-                          }`}
-                        value={u.payment_status === 'completed' ? 'completed' : 'pending'}
-                        onChange={(e) => updateUserStatus(u.id, e.target.value)}
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </td>
-                    <td className="px-6 py-4 text-right text-gray-500 whitespace-nowrap">
-                      {new Date(u.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={() => {
-                          setSelectedUser(u);
-                          setShowDeleteModal(true);
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete User"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                            }`}
+                          value={u.payment_status === 'completed' ? 'completed' : 'pending'}
+                          onChange={(e) => updateUserStatus(u.id, e.target.value)}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                      </td>
+                      <td className="px-6 py-4 text-right text-gray-500 whitespace-nowrap">
+                        {joinedDate.toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-right text-gray-500 whitespace-nowrap">
+                        {endDate.toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => {
+                            setSelectedUser(u);
+                            setShowDeleteModal(true);
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete User"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>

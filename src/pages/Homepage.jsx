@@ -12,6 +12,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import useAuth from '../hooks/useAuth';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import Sidebar from '../components/Sidebar';
 
 const JOBS_PER_PAGE = 10;
 
@@ -59,32 +60,67 @@ const Homepage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalJobs, setTotalJobs] = useState(0);
 
+  const [subscriptionExpired, setSubscriptionExpired] = useState(false);
+
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Fetch saved job IDs for the current user
+  const fetchSavedJobIds = async () => {
+    if (!user) {
+      setSavedJobIds(new Set());
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('saved_jobs')
+        .select('job_id')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      const ids = new Set(data.map(item => item.job_id));
+      setSavedJobIds(ids);
+    } catch (err) {
+      console.error('Error fetching saved jobs:', err);
+    }
+  };
+
+  // Check subscription status
   useEffect(() => {
-    const fetchSavedJobIds = async () => {
-      if (!user) {
-        setSavedJobIds(new Set());
-        return;
-      }
+    const checkSubscription = async () => {
+      if (!user) return;
 
       try {
         const { data, error } = await supabase
-          .from('saved_jobs')
-          .select('job_id')
-          .eq('user_id', user.id);
+          .from('profiles')
+          .select('created_at')
+          .eq('id', user.id)
+          .single();
 
         if (error) throw error;
 
-        const ids = new Set(data.map(item => item.job_id));
-        setSavedJobIds(ids);
+        if (data) {
+          const joinedDate = new Date(data.created_at);
+          const endDate = new Date(joinedDate);
+          endDate.setMonth(endDate.getMonth() + 1);
+
+          if (new Date() > endDate) {
+            setSubscriptionExpired(true);
+          } else {
+            setSubscriptionExpired(false);
+          }
+        }
       } catch (err) {
-        console.error('Error fetching saved jobs:', err);
+        console.error('Error checking subscription:', err);
       }
     };
 
+    checkSubscription();
+  }, [user]);
+
+  // Fetch saved job IDs for the current user
+  useEffect(() => {
     fetchSavedJobIds();
   }, [user]);
 
@@ -105,12 +141,12 @@ const Homepage = () => {
   const totalPages = Math.ceil(totalJobs / JOBS_PER_PAGE);
 
   useEffect(() => {
-    if (user) {
+    if (user && !subscriptionExpired) {
       fetchJobs();
-    } else {
-      setLoading(false); // If not user, just show dummy data, so stop loading
+    } else if (!user) {
+      setLoading(false); // If not user, just show dummy data
     }
-  }, [filters, currentPage, user]);
+  }, [filters, currentPage, user, subscriptionExpired]);
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -161,7 +197,10 @@ const Homepage = () => {
 
   const handleSearchClick = () => {
     setCurrentPage(1); // Reset to page 1 on search
-    if (user) fetchJobs();
+    if (user && !subscriptionExpired) {
+      fetchJobs();
+      fetchSavedJobIds(); // Refresh saved status on search
+    }
   };
 
   const handlePageChange = (newPage) => {
@@ -175,115 +214,149 @@ const Homepage = () => {
       <Navbar />
       <HeroSection />
 
-      <section className="bg-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center mb-6">
-            <h3 className="text-3xl font-semibold text-gray-900">Search for your perfect role.</h3>
-            <p className="text-gray-500 mt-2">Data verified by the U.S. Government.</p>
+      <div className="flex bg-gray-50">
+        {/* Sidebar for logged-in users, below Hero, beside Search */}
+        {user && (
+          <div className="hidden md:block w-64 flex-shrink-0 border-r border-gray-200 bg-white">
+            <Sidebar className="h-[calc(100vh-80px)] sticky top-0" showHeader={false} />
           </div>
+        )}
 
-          {/* Search Bar */}
-          <div className="flex items-center bg-white rounded-full shadow-lg border border-gray-100 overflow-hidden max-w-4xl mx-auto mb-6">
-            <div className="px-4 text-gray-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search for jobs, companies, or titles..."
-              className="flex-1 px-2 py-4 text-gray-900 text-base focus:outline-none"
-            />
-            <button
-              onClick={handleSearchClick}
-              className="px-6 py-3 bg-primary-yellow text-primary-dark font-semibold hover:bg-yellow-500 transition"
-            >
-              Search
-            </button>
-          </div>
-
-          <SearchFilters onFilterChange={(newFilters) => {
-            setFilters(newFilters);
-            setCurrentPage(1); // Reset page on filter change
-          }} />
-
-          {/* Job Cards List */}
-          <div className="mt-8 max-w-4xl mx-auto space-y-4">
-            {loading ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
+        <main className="flex-1 w-full">
+          <section className="bg-white">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <div className="text-center mb-6">
+                <h3 className="text-3xl font-semibold text-gray-900">Search for your perfect role.</h3>
+                <p className="text-gray-500 mt-2">Data verified by the U.S. Government.</p>
               </div>
-            ) : user ? (
-              // Logged In: Real Data + Pagination
-              jobs.length > 0 ? (
-                <>
-                  {jobs.map((job) => (
-                    <JobCard
-                      key={job.job_id || job.id}
-                      job={job}
-                      isSaved={savedJobIds.has(job.job_id)}
-                      onSaveToggle={handleSaveToggle}
-                    />
-                  ))}
 
-                  {/* Pagination Controls */}
-                  <div className="flex items-center justify-center gap-4 mt-8">
-                    <button
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      Previous
-                    </button>
+              {/* Search Bar */}
+              <div className="flex items-center bg-white rounded-full shadow-lg border border-gray-100 overflow-hidden max-w-4xl mx-auto mb-6">
+                <div className="px-4 text-gray-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Search for jobs, companies, or titles..."
+                  className="flex-1 px-2 py-4 text-gray-900 text-base focus:outline-none"
+                />
+                <button
+                  onClick={handleSearchClick}
+                  className="px-6 py-3 bg-primary-yellow text-primary-dark font-semibold hover:bg-yellow-500 transition"
+                >
+                  Search
+                </button>
+              </div>
 
-                    <span className="text-gray-600 font-medium">
-                      Page {currentPage} of {totalPages || 1}
-                    </span>
+              <SearchFilters onFilterChange={(newFilters) => {
+                setFilters(newFilters);
+                setCurrentPage(1); // Reset page on filter change
+              }} />
 
-                    <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                    >
-                      Next
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
+              {/* Job Cards List */}
+              <div className="mt-8 max-w-4xl mx-auto space-y-4">
+                {loading ? (
+                  <div className="flex justify-center py-10">
+                    <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
                   </div>
-                </>
-              ) : (
-                <div className="text-center py-10 text-gray-500">
-                  <p>No jobs found matching your criteria.</p>
-                </div>
-              )
-            ) : (
-              // Logged Out: Dummy Data + Next leads to Pricing
-              <>
-                {homepageJobs.map((job) => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    isSaved={false}
-                    onSaveToggle={handleSaveToggle}
-                  />
-                ))}
+                ) : user ? (
+                  // Logged In Logic
+                  subscriptionExpired ? (
+                    // Subscription Expired View
+                    <div className="text-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100">
+                      <div className="p-4 bg-red-50 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-3">Your subscription is expired</h2>
+                      <p className="text-gray-500 max-w-md mx-auto mb-8">
+                        Your monthly access has ended. Subscribe again to continue accessing verified job listings and premium features.
+                      </p>
+                      <Link
+                        to="/pricing"
+                        className="inline-flex items-center gap-2 px-8 py-3 bg-primary-yellow text-primary-dark font-bold rounded-lg shadow-lg hover:bg-yellow-400 transition-all transform hover:-translate-y-1"
+                      >
+                        Subscribe Now
+                        <ChevronRight className="w-5 h-5" />
+                      </Link>
+                    </div>
+                  ) : (
+                    // Active Subscription: Real Data + Pagination
+                    jobs.length > 0 ? (
+                      <>
+                        {jobs.map((job) => (
+                          <JobCard
+                            key={job.job_id || job.id}
+                            job={job}
+                            isSaved={savedJobIds.has(job.job_id || job.id)}
+                            onSaveToggle={handleSaveToggle}
+                          />
+                        ))}
 
-                <div className="flex justify-center mt-8">
-                  <button
-                    onClick={() => navigate('/pricing')}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-500 text-gray-900 font-bold rounded-lg shadow-md hover:from-yellow-500 hover:to-yellow-600 transition-all"
-                  >
-                    Next
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </section>
+                        {/* Pagination Controls */}
+                        <div className="flex items-center justify-center gap-4 mt-8">
+                          <button
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                            Previous
+                          </button>
+
+                          <span className="text-gray-600 font-medium">
+                            Page {currentPage} of {totalPages || 1}
+                          </span>
+
+                          <button
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                          >
+                            Next
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-10 text-gray-500">
+                        <p>No jobs found matching your criteria.</p>
+                      </div>
+                    )
+                  )
+                ) : (
+                  // Logged Out: Dummy Data + Next leads to Pricing
+                  <>
+                    {homepageJobs.map((job) => (
+                      <JobCard
+                        key={job.id}
+                        job={job}
+                        isSaved={false}
+                        onSaveToggle={handleSaveToggle}
+                      />
+                    ))}
+
+                    <div className="flex justify-center mt-8">
+                      <button
+                        onClick={() => navigate('/pricing')}
+                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-500 text-gray-900 font-bold rounded-lg shadow-md hover:from-yellow-500 hover:to-yellow-600 transition-all"
+                      >
+                        Next
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
 
       <FeaturesSection />
       <HowItWorks />
