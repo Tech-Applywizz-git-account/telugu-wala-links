@@ -61,6 +61,8 @@ const Homepage = () => {
     return !sessionStorage.getItem('homepageJobs');
   });
   const [searchInput, setSearchInput] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [searchTimeout, setSearchTimeout] = useState(null);
   const [filters, setFilters] = useState({
     role: [],
     location: [],
@@ -120,6 +122,51 @@ const Homepage = () => {
       console.log('✅ Fetched applied job IDs:', Array.from(ids));
     } catch (err) {
       console.error('Error fetching applied jobs:', err);
+    }
+  };
+
+  const handleSearchSuggestions = (value) => {
+    setSearchInput(value); // Update input immediately
+
+    if (searchTimeout) clearTimeout(searchTimeout);
+
+    const timeoutId = setTimeout(async () => {
+      if (!value || value.length < 2) {
+        setSuggestions([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('job_jobrole_all')
+          .select('title, company')
+          .or(`title.ilike.%${value}%,company.ilike.%${value}%`)
+          .limit(10);
+
+        if (data) {
+          const uniqueValues = new Set();
+          const lowerValue = value.toLowerCase();
+          data.forEach(item => {
+            if (item.title && item.title.toLowerCase().includes(lowerValue)) uniqueValues.add(item.title);
+            if (item.company && item.company.toLowerCase().includes(lowerValue)) uniqueValues.add(item.company);
+          });
+          setSuggestions([...uniqueValues].slice(0, 8));
+        }
+      } catch (err) {
+        console.error("Error fetching suggestions:", err);
+      }
+    }, 300);
+
+    setSearchTimeout(timeoutId);
+  };
+
+  const handleSuggestionClick = (suggestion) => {
+    setSearchInput(suggestion);
+    setSuggestions([]);
+    setCurrentPage(1);
+    if (user && !subscriptionExpired) {
+      fetchJobs(1, suggestion); // Immediately fetch with new term
+      fetchSavedJobIds();
     }
   };
   // Check subscription status
@@ -196,109 +243,171 @@ const Homepage = () => {
     } else if (!user) {
       setLoading(false); // If not user, just show dummy data
     }
-  }, [filters, currentPage, user, subscriptionExpired]);
+  }, [filters, currentPage, user?.id, subscriptionExpired]);
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (pageOverride = null, searchOverride = null) => {
+    // Determine effective values (use overrides or fall back to state)
+    const activePage = pageOverride !== null ? pageOverride : currentPage;
+    const activeSearch = searchOverride !== null ? searchOverride : searchInput;
+
     // Only show loading spinner if we clearly don't have data to show, 
-    // or if we want to ensure the user knows a search is happening (e.g. invalid current data).
-    // But for tab switching, we want to act 'instant'.
+    // or if searching (which we decide based on activeSearch presence).
     if (jobs.length === 0) setLoading(true);
 
     try {
       let query = supabase
         .from('job_jobrole_all')
         .select('*', { count: 'exact' })
-        .order('upload_date', { ascending: false });
+        .order('upload_date', { ascending: false }); // Always get latest jobs first
 
-      // Apply Search
-      if (searchInput) {
-        setLoading(true); // Always show loader for explicit search interactions
-        query = query.or(`title.ilike.%${searchInput}%,company.ilike.%${searchInput}%,description.ilike.%${searchInput}%`);
+      // --- Apply Filters to SQL Query ---
+
+      // Search Text (SQL Filter)
+      if (activeSearch) {
+        // If user is searching, show loader to indicate work
+        setLoading(true);
+        query = query.or(`title.ilike.%${activeSearch}%,company.ilike.%${activeSearch}%,description.ilike.%${activeSearch}%`);
       }
 
-      // Apply Filters
+      // Role Filter
       if (filters.role.length > 0) {
         const roleConditions = filters.role.map(r => `job_role_name.ilike.%${r}%`).join(',');
         if (roleConditions) query = query.or(roleConditions);
       }
 
+      // Company Filter
       if (filters.company.length > 0) {
         const companyConditions = filters.company.map(c => `company.ilike.%${c}%`).join(',');
         if (companyConditions) query = query.or(companyConditions);
       }
 
+      // Location Filter
       if (filters.location.length > 0) {
         const locConditions = filters.location.map(l => `location.ilike.%${l.split(',')[0]}%`).join(',');
         if (locConditions) query = query.or(locConditions);
       }
 
-      // Smart Experience Filter - maps to years_exp_required column with intelligent range matching
+      // Experience Filter
       if (filters.experience.length > 0) {
         const expConditions = [];
-
         filters.experience.forEach(expInput => {
-          // Extract numbers from input (e.g., "1", "8", "5-7", "8-14")
           const numbers = expInput.match(/\d+/g);
-
           if (numbers && numbers.length > 0) {
-            // Convert to numbers
             const nums = numbers.map(n => parseInt(n));
             const minInput = Math.min(...nums);
             const maxInput = nums.length > 1 ? Math.max(...nums) : minInput;
 
-            // Match ranges that overlap with the input
-            // For "0-4 years", "5-7 years", "8-11 years", "11+ years"
-            const rangePatterns = [];
-
-            // Check common patterns in your database
             const dbRanges = [
               { pattern: '0-4', min: 0, max: 4 },
               { pattern: '5-7', min: 5, max: 7 },
               { pattern: '8-11', min: 8, max: 11 },
-              { pattern: '11+', min: 11, max: 100 } // 11+ means 11 or more
+              { pattern: '11+', min: 11, max: 100 }
             ];
 
+            const rangePatterns = [];
             dbRanges.forEach(range => {
-              // Check if ranges overlap
-              // Ranges overlap if: minInput <= range.max AND maxInput >= range.min
               if (minInput <= range.max && maxInput >= range.min) {
                 rangePatterns.push(`years_exp_required.ilike.%${range.pattern}%`);
               }
             });
-
-            // Add all matching patterns
-            if (rangePatterns.length > 0) {
-              expConditions.push(...rangePatterns);
-            }
+            if (rangePatterns.length > 0) expConditions.push(...rangePatterns);
           } else {
-            // If no numbers found, do simple string match (fallback)
             expConditions.push(`years_exp_required.ilike.%${expInput}%`);
           }
         });
-
-        // Remove duplicates and apply
         const uniqueConditions = [...new Set(expConditions)];
         if (uniqueConditions.length > 0) {
           query = query.or(uniqueConditions.join(','));
         }
       }
 
-      // Pagination
-      const from = (currentPage - 1) * JOBS_PER_PAGE;
-      const to = from + JOBS_PER_PAGE - 1;
-      query = query.range(from, to);
+      // --- Sorting Strategy ---
+      // If we have a Search Input OR Role Filters, we prioritize strict relevance (Client Side Sorting).
+      // Otherwise, we just use standard Date sorting (Server Side Pagination).
+      const useRelevanceSorting = activeSearch || filters.role.length > 0;
 
-      const { data, error, count } = await query;
-      if (error) throw error;
+      if (useRelevanceSorting) {
+        // FETCH MORE for client-side sorting to work effectively
+        query = query.limit(200);
 
-      setJobs(data || []);
-      setTotalJobs(count || 0);
+        const { data, error, count } = await query;
+        if (error) throw error;
 
-      // Cache results only if it's the default view (no search, page 1, basic filters)
-      // or simply cache the latest view so navigating back restores it.
-      // Saving simpler: just cache what we have.
-      sessionStorage.setItem('homepageJobs', JSON.stringify(data || []));
-      sessionStorage.setItem('homepageTotalJobs', (count || 0).toString());
+        if (data) {
+          const normalizedSearch = activeSearch ? activeSearch.trim().toLowerCase() : '';
+          const roleFilters = filters.role.map(r => r.toLowerCase());
+
+          // Sort by Relevance
+          const sortedData = data.sort((a, b) => {
+            const getScore = (job) => {
+              let score = 0;
+              const title = (job.title || '').trim().toLowerCase();
+              const role = (job.job_role_name || '').trim().toLowerCase();
+
+              // 1. Text Search Relevance
+              if (normalizedSearch) {
+                // PRIORITIZE TITLE
+                if (title === normalizedSearch) score += 1000; // Exact Title Match (Highest)
+                else if (title.startsWith(normalizedSearch)) score += 500;
+                else if (title.includes(normalizedSearch)) score += 250;
+
+                // THEN CHECK ROLE
+                if (role === normalizedSearch) score += 200; // Exact Role Match
+                else if (role.startsWith(normalizedSearch)) score += 100;
+                else if (role.includes(normalizedSearch)) score += 50;
+
+                // Boost for description last
+                if ((job.description || '').toLowerCase().includes(normalizedSearch)) score += 10;
+              }
+
+              // 2. Role Filter Relevance
+              if (roleFilters.length > 0) {
+                // PRIORITIZE TITLE MATCHING THE FILTER
+                if (roleFilters.includes(title)) score += 300;
+                else if (roleFilters.some(r => title.startsWith(r))) score += 150;
+
+                // THEN CHECK ROLE MATCHING THE FILTER
+                if (roleFilters.includes(role)) score += 100;
+                else if (roleFilters.some(r => role.startsWith(r))) score += 50;
+              }
+
+              return score;
+            };
+
+            return getScore(b) - getScore(a); // Descending score
+          });
+
+          // Handle client-side pagination
+          const total = sortedData.length;
+          setTotalJobs(total);
+
+          const from = (activePage - 1) * JOBS_PER_PAGE;
+          const to = from + JOBS_PER_PAGE;
+          const paginatedData = sortedData.slice(from, to);
+
+          setJobs(paginatedData);
+
+          sessionStorage.setItem('homepageJobs', JSON.stringify(paginatedData));
+          sessionStorage.setItem('homepageTotalJobs', total.toString());
+        }
+
+      } else {
+        // --- DEFAULT MODE: Server-Side Pagination (Date Sorted) ---
+        // Query is already ordered by upload_date above
+        const from = (activePage - 1) * JOBS_PER_PAGE;
+        const to = from + JOBS_PER_PAGE - 1;
+        query = query.range(from, to);
+
+        const { data, error, count } = await query;
+        if (error) throw error;
+
+        setJobs(data || []);
+        setTotalJobs(count || 0);
+
+        // Cache results
+        sessionStorage.setItem('homepageJobs', JSON.stringify(data || []));
+        sessionStorage.setItem('homepageTotalJobs', (count || 0).toString());
+      }
 
     } catch (error) {
       console.error("Error fetching homepage jobs:", error);
@@ -310,7 +419,9 @@ const Homepage = () => {
   const handleSearchClick = () => {
     setCurrentPage(1); // Reset to page 1 on search
     if (user && !subscriptionExpired) {
-      fetchJobs();
+      // Pass the current search input explicitly to avoid stale state issues, though normally handleSearchClick 
+      // is called well after input change.
+      fetchJobs(1, searchInput);
       fetchSavedJobIds(); // Refresh saved status on search
     }
   };
@@ -342,26 +453,47 @@ const Homepage = () => {
                 <p className="text-gray-500 mt-2">Data verified by the U.S. Government.</p>
               </div>
 
-              {/* Search Bar */}
-              <div className="flex items-center bg-white rounded-full shadow-lg border border-gray-100 overflow-hidden max-w-4xl mx-auto mb-6">
-                <div className="px-4 text-gray-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
-                  </svg>
+              {/* Search Bar Wrapper */}
+              <div className="relative max-w-4xl mx-auto mb-6 z-20">
+                <div className="flex items-center bg-white rounded-full shadow-lg border border-gray-100 overflow-hidden">
+                  <div className="px-4 text-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => handleSearchSuggestions(e.target.value)}
+                    onBlur={() => setTimeout(() => setSuggestions([]), 200)}
+                    placeholder="Search for jobs, companies, or titles..."
+                    className="flex-1 px-2 py-4 text-gray-900 text-base focus:outline-none"
+                  />
+                  <button
+                    onClick={handleSearchClick}
+                    className="px-6 py-3 bg-primary-yellow text-primary-dark font-semibold hover:bg-yellow-500 transition"
+                  >
+                    Search
+                  </button>
                 </div>
-                <input
-                  type="text"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Search for jobs, companies, or titles..."
-                  className="flex-1 px-2 py-4 text-gray-900 text-base focus:outline-none"
-                />
-                <button
-                  onClick={handleSearchClick}
-                  className="px-6 py-3 bg-primary-yellow text-primary-dark font-semibold hover:bg-yellow-500 transition"
-                >
-                  Search
-                </button>
+
+                {/* Suggestions Dropdown */}
+                {suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden z-30">
+                    {suggestions.map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        onMouseDown={(e) => {
+                          e.preventDefault(); // Prevent input blur momentarily
+                          handleSuggestionClick(suggestion);
+                        }}
+                        className="w-full text-left px-6 py-3 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors border-b border-gray-50 last:border-0"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <SearchFilters onFilterChange={(newFilters) => {
