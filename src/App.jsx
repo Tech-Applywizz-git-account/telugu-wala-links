@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import { AuthProvider } from './hooks/useAuth';
 import './index.css';
 
+
 function App() {
   return (
     <Router>
