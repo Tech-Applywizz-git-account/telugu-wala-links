@@ -478,6 +478,7 @@ const ProfileTab = () => {
         last_name: '',
         mobile_number: '',
         experience: '',
+        domain: '',
         location: '',
         bio: '',
     });
@@ -506,6 +507,7 @@ const ProfileTab = () => {
                     last_name: profile.last_name || '',
                     mobile_number: profile.mobile_number || '',
                     experience: profile.experience || '',
+                    domain: profile.domain || '',
                     location: profile.location || '',
                     bio: profile.bio || '',
                 });
@@ -541,6 +543,7 @@ const ProfileTab = () => {
                     last_name: profileData.last_name,
                     mobile_number: profileData.mobile_number,
                     experience: profileData.experience,
+                    domain: profileData.domain,
                     location: profileData.location,
                     bio: profileData.bio,
                     updated_at: new Date().toISOString(),
@@ -701,11 +704,26 @@ const ProfileTab = () => {
                                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400"
                             >
                                 <option value="">Select experience...</option>
-                                <option value="0-4 years">0-4 years</option>
-                                <option value="5-7 years">5-7 years</option>
-                                <option value="8-11 years">8-11 years</option>
-                                <option value="11+ years">11+ years</option>
+                                <option value="Fresher">Fresher (0 years)</option>
+                                <option value="Junior">Junior (1-3 years)</option>
+                                <option value="Middle">Middle (4-7 years)</option>
+                                <option value="Senior">Senior (8+ years)</option>
                             </select>
+                        </div>
+
+                        {/* Domain */}
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Domain
+                            </label>
+                            <input
+                                type="text"
+                                name="domain"
+                                value={profileData.domain}
+                                onChange={handleChange}
+                                placeholder="e.g. IT, Healthcare, Finance"
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400"
+                            />
                         </div>
 
                         {/* Location */}

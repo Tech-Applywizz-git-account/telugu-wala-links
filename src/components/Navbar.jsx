@@ -9,7 +9,7 @@ const Navbar = () => {
 
     const navigate = useNavigate();
     const location = useLocation();
-    const { user, role, loggingOut, signOut } = useAuth();
+    const { user, role, loggingOut, signOut, isPendingPayment } = useAuth();
 
     const handleSectionClick = (sectionId) => {
         if (location.pathname !== '/') {
@@ -51,7 +51,10 @@ const Navbar = () => {
                 <div className="hidden md:flex justify-between items-center h-16 w-full">
 
                     {/* LEFT — Logo */}
-                    <Link to="/" className="flex items-center gap-2">
+                    <Link 
+                        to={user && isPendingPayment ? "/dashboard" : "/"} 
+                        className="flex items-center gap-2"
+                    >
                         <div className="w-10 h-10 bg-amber-400 rounded-lg flex items-center justify-center">
                             <span className="text-gray-900 font-bold text-xl">TW</span>
                         </div>
@@ -66,12 +69,7 @@ const Navbar = () => {
                         >
                             How it works
                         </button>
-                        <Link
-                            to="/pricing"
-                            className="text-gray-600 font-medium hover:text-gray-900 transition-colors py-2"
-                        >
-                            Pricing
-                        </Link>
+
                         <button
                             onClick={() => handleSectionClick('faq')}
                             className="text-gray-600 font-medium hover:text-gray-900 transition-colors py-2"
@@ -146,7 +144,10 @@ const Navbar = () => {
 
                 {/* -------- Mobile Layout -------- */}
                 <div className="md:hidden flex justify-between items-center h-16">
-                    <Link to="/" className="flex items-center gap-2">
+                    <Link 
+                        to={user && isPendingPayment ? "/dashboard" : "/"} 
+                        className="flex items-center gap-2"
+                    >
                         <div className="w-9 h-9 bg-amber-400 rounded-lg flex items-center justify-center">
                             <span className="text-gray-900 font-bold text-lg">TW</span>
                         </div>
@@ -172,13 +173,7 @@ const Navbar = () => {
                         How it works
                     </button>
 
-                    <Link
-                        to="/pricing"
-                        className="block text-gray-600 font-medium hover:text-gray-900 py-2"
-                        onClick={() => setIsMenuOpen(false)}
-                    >
-                        Pricing
-                    </Link>
+
 
                     <button
                         onClick={() => handleSectionClick('faq')}

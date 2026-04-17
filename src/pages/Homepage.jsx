@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import HeroSection from '../components/HeroSection';
@@ -11,7 +12,7 @@ import JobCard from '../components/JobCard';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import useAuth from '../hooks/useAuth';
-import { Loader2, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, CheckCircle, Lock } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import RenewalPayment from '../components/RenewalPayment';
 
@@ -702,148 +703,16 @@ const Homepage = () => {
                 {loading || (user && checkingSub) ? (
                   <div className="flex justify-center py-10">
                     <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
-                  </div>
-                ) : user ? (
-                  // Logged In Logic
-                  subscriptionExpired ? (
-                    // Subscription Expired View
-                    <div className="text-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100">
-                      <div className="p-4 bg-red-50 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <h2 className="text-3xl font-bold text-gray-900 mb-2 font-display">Subscription Expired</h2>
-                      <p className="text-sm text-gray-500 mb-2 italic">subscribe to get the access</p>
-                      {subscriptionEndDate && (
-                        <p className="text-xs text-red-400 mb-8 font-medium">Your access ended on {new Date(subscriptionEndDate).toLocaleDateString()}</p>
-                      )}
+                  </div>                ) : user ? (
+                  // Logged In: Dashboard (Teaser if pending, Full if paid)
+                  <>
 
-                      {showRenewalFlow ? (
-                        <div className="max-w-xl mx-auto p-4 text-left">
-                          {renewalStep === 1 && (
-                            <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-xl">
-                              <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xl font-bold text-gray-900">Your Registration Details</h3>
-                                <button
-                                  onClick={() => setIsEditingProfile(!isEditingProfile)}
-                                  className="text-sm text-blue-600 font-semibold hover:underline bg-blue-50 px-3 py-1 rounded-full hover:bg-blue-100 transition-colors"
-                                >
-                                  {isEditingProfile ? 'Save Changes' : 'Edit Details'}
-                                </button>
-                              </div>
-                              <div className="space-y-5">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="space-y-1">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">First Name</label>
-                                    <input
-                                      type="text"
-                                      value={renewProfile.firstName}
-                                      disabled={!isEditingProfile}
-                                      onChange={(e) => setRenewProfile({ ...renewProfile, firstName: e.target.value })}
-                                      className={`w-full p-3 rounded-xl border transition-all ${!isEditingProfile ? 'bg-gray-50 border-gray-100 text-gray-700 font-medium' : 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-100'}`}
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Last Name</label>
-                                    <input
-                                      type="text"
-                                      value={renewProfile.lastName}
-                                      disabled={!isEditingProfile}
-                                      onChange={(e) => setRenewProfile({ ...renewProfile, lastName: e.target.value })}
-                                      className={`w-full p-3 rounded-xl border transition-all ${!isEditingProfile ? 'bg-gray-50 border-gray-100 text-gray-700 font-medium' : 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-100'}`}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Email Address</label>
-                                  <input type="text" value={renewProfile.email} disabled className="w-full p-3 rounded-xl border border-gray-100 bg-gray-50 text-gray-500 font-medium cursor-not-allowed" />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Phone Number</label>
-                                  <input
-                                    type="text"
-                                    value={renewProfile.phone}
-                                    disabled={!isEditingProfile}
-                                    onChange={(e) => setRenewProfile({ ...renewProfile, phone: e.target.value })}
-                                    className={`w-full p-3 rounded-xl border transition-all ${!isEditingProfile ? 'bg-gray-50 border-gray-100 text-gray-700 font-medium' : 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-100'}`}
-                                  />
-                                </div>
 
-                                <div className="pt-6 border-t border-gray-100 mt-6">
-                                  {renewError && <p className="text-red-500 text-sm mb-4 bg-red-50 p-3 rounded-lg border border-red-100">{renewError}</p>}
-                                  <button
-                                    onClick={handleUpdateProfileAndProceed}
-                                    disabled={renewLoading}
-                                    className="w-full bg-primary-yellow text-primary-dark font-black text-lg py-4 rounded-xl hover:bg-yellow-400 transition-all shadow-lg active:scale-95 disabled:opacity-50"
-                                  >
-                                    {renewLoading ? 'Saving Info...' : 'Get Access'}
-                                  </button>
-                                  <button onClick={() => setShowRenewalFlow(false)} className="w-full mt-4 text-gray-400 text-sm font-semibold hover:text-gray-600 transition-colors uppercase tracking-widest">Cancel Renewal</button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {renewalStep === 2 && (
-                            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                              <h3 className="text-xl font-bold text-gray-900 mb-2">Complete Payment</h3>
-                              <p className="text-gray-600 mb-6 text-sm">Subscribe for 1 month access ($30.00)</p>
-                              <div id="paypal-renewal-container">
-                                {/* Component for Renewal Payment */}
-                                <div className="p-10 text-center border-2 border-dashed border-gray-200 rounded-lg">
-                                  <p className="text-gray-500 text-sm mb-4">Click below to pay with PayPal</p>
-                                  <RenewalPayment
-                                    user={user}
-                                    profile={renewProfile}
-                                    onSuccess={() => {
-                                      setRenewalStep(3);
-                                      setSubscriptionExpired(false);
-                                      setTimeout(() => setShowRenewalFlow(false), 3000);
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {renewalStep === 3 && (
-                            <div className="text-center p-8">
-                              <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <CheckCircle className="w-10 h-10" />
-                              </div>
-                              <h3 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h3>
-                              <p className="text-gray-600">Your subscription has been renewed. Redirecting...</p>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <>
-                          <button
-                            onClick={handleRenewClick}
-                            className="inline-flex items-center gap-2 px-10 py-4 bg-primary-yellow text-primary-dark font-bold rounded-xl shadow-xl hover:bg-yellow-400 transition-all transform hover:-translate-y-1 active:scale-95"
-                          >
-                            Get Access
-                            <ChevronRight className="w-5 h-5" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    // Active Subscription: Real Data + Pagination
-                    jobs.length > 0 ? (
+                    {jobs.length > 0 ? (
                       <>
                         {jobs.map((job) => {
                           const jobId = job.job_id || job.id;
-                          const jobIdString = String(jobId); // Convert to string for consistency
-
-                          console.log('📋 Homepage Rendering Job:', {
-                            jobId: jobIdString,
-                            title: job.title,
-                            company: job.company,
-                            isSaved: savedJobIds.has(jobIdString),
-                            isApplied: appliedJobIds.has(jobIdString)
-                          });
+                          const jobIdString = String(jobId);
 
                           return (
                             <JobCard
@@ -886,8 +755,8 @@ const Homepage = () => {
                       <div className="text-center py-10 text-gray-500">
                         <p>No jobs found matching your criteria.</p>
                       </div>
-                    )
-                  )
+                    )}
+                  </>
                 ) : (
                   // Logged Out: Dummy Data + Next leads to Pricing
                   <>
@@ -902,7 +771,7 @@ const Homepage = () => {
 
                     <div className="flex justify-center mt-8">
                       <button
-                        onClick={() => navigate('/pricing')}
+                        onClick={() => navigate('/signup')}
                         className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-500 text-gray-900 font-bold rounded-lg shadow-md hover:from-yellow-500 hover:to-yellow-600 transition-all"
                       >
                         Next

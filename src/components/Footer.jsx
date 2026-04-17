@@ -29,11 +29,7 @@ const Footer = () => {
                                     How it works
                                 </a>
                             </li>
-                            <li>
-                                <Link to="/pricing" className="hover:text-primary-yellow transition">
-                                    Pricing
-                                </Link>
-                            </li>
+
                             <li>
                                 <Link to="/jobs" className="hover:text-primary-yellow transition">
                                     Browse Jobs

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
     MapPin,
     Clock,
@@ -11,7 +12,8 @@ import {
     CheckCircle,
     Circle,
     FileText,
-    X
+    X,
+    Lock
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { leadsSupabase } from '../leadsSupabaseClient';
@@ -20,14 +22,16 @@ import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
 
 const JobCard = ({ job, isSaved = false, isApplied = false, onSaveToggle, onApplyToggle }) => {
-    const { user, subscriptionExpired } = useAuth();
+    const { user, subscriptionExpired, isPendingPayment } = useAuth();
+    const navigate = useNavigate();
 
     // DEBUG: Track what's being rendered
     console.log("🎫 JobCard DEBUG:", {
         title: job.title,
         userEmail: user?.email,
         subscriptionExpired: subscriptionExpired,
-        willShowActiveLink: user && !subscriptionExpired
+        isPendingPayment: isPendingPayment,
+        willShowActiveLink: user && !subscriptionExpired && !isPendingPayment
     });
 
     const [saved, setSaved] = useState(isSaved);
@@ -65,8 +69,8 @@ const JobCard = ({ job, isSaved = false, isApplied = false, onSaveToggle, onAppl
     const handleSaveToggle = async (e) => {
         e.preventDefault();
 
-        if (!user || subscriptionExpired) {
-            alert('Your subscription has expired. Please renew to save jobs.');
+        if (!user || isPendingPayment) {
+            navigate(user ? '/payment' : '/login');
             return;
         }
 
@@ -103,8 +107,8 @@ const JobCard = ({ job, isSaved = false, isApplied = false, onSaveToggle, onAppl
     const handleApplyToggle = async (e) => {
         e.preventDefault();
 
-        if (!user || subscriptionExpired) {
-            alert('Your subscription has expired. Please renew to apply.');
+        if (!user || isPendingPayment) {
+            navigate(user ? '/payment' : '/login');
             return;
         }
 
@@ -211,7 +215,17 @@ const JobCard = ({ job, isSaved = false, isApplied = false, onSaveToggle, onAppl
 
                 {/* LEFT CONTENT */}
                 <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-yellow-600 mb-1">
+                    <h3 
+                        onClick={(e) => {
+                            e.preventDefault();
+                            if (!user || isPendingPayment) {
+                                navigate(user ? '/payment' : '/login');
+                            } else {
+                                window.open(job.url, '_blank', 'noopener,noreferrer');
+                            }
+                        }}
+                        className="text-xl font-bold text-gray-900 group-hover:text-yellow-600 mb-1 cursor-pointer hover:underline decoration-yellow-400"
+                    >
                         {job.title}
                     </h3>
                     <div className="flex items-center gap-2 text-gray-600 mb-3">
@@ -240,14 +254,14 @@ const JobCard = ({ job, isSaved = false, isApplied = false, onSaveToggle, onAppl
                 {/* RIGHT ACTIONS */}
                 <div className="flex sm:flex-col gap-3 sm:min-w-[150px]">
 
-                    {/* APPLY NOW */}
-                    {!user || subscriptionExpired ? (
+                    {/* APPLY NOW / JOIN / UNLOCK */}
+                    {!user || isPendingPayment ? (
                         <button
-                            disabled
-                            className="w-full bg-gray-100 text-gray-400 px-4 py-2.5 rounded-lg cursor-not-allowed flex justify-center gap-2"
+                            onClick={() => navigate(user ? '/payment' : '/login')}
+                            className="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 px-4 py-2.5 rounded-lg text-center font-bold flex justify-center items-center gap-2 shadow-sm transition-all text-gray-900"
                         >
-                            {subscriptionExpired ? 'Renew to Apply' : 'Login to Apply'}
-                            <ExternalLink className="w-4 h-4 opacity-50" />
+                            <Lock className="w-4 h-4" />
+                            {user ? 'Apply Now (Unlock Access)' : 'Join to Apply'}
                         </button>
                     ) : (
                         <a

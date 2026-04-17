@@ -25,3 +25,9 @@ dist-ssr
 
 .vercel
 .env*.local
+
+# Supabase & Database — keep server-side files out of repo
+*.sql
+*.ps1
+supabase/functions/
+supabase/migrations/

@@ -171,7 +171,6 @@ const Sidebar = ({ className = "", showHeader = true }) => {
         { id: "applied", label: "Applied Jobs", icon: Briefcase },
         { id: "profile", label: "Profile", icon: User },
         // { id: "settings", label: "Settings", icon: Settings },
-        { id: "billing", label: "Billing", icon: CreditCard },
     ];
 
     const adminTab = { id: "admin", label: "Admin Controls", icon: Shield };

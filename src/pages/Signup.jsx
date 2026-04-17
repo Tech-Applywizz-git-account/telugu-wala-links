@@ -1,35 +1,92 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Check, Star, CheckCircle } from 'lucide-react';
+import { CheckCircle, User, Mail, Phone, ArrowRight, Loader2 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
+import { PhoneInput } from 'react-international-phone';
+import 'react-international-phone/style.css';
 
 const Signup = () => {
-    const [step, setStep] = useState(1);
+    const [step, setStep] = useState(1); // 1: Email, 2: OTP, 3: Form, 4: Success
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
         email: '',
         mobileNumber: '',
-        countryCode: '+1', // Default to US
-        promoCode: ''
+        countryCode: '1', // Default to 1 (US) or 91 (India)
+        experience: '',
+        domain: '',
     });
-    const [paymentData, setPaymentData] = useState(null);
+    const [otp, setOtp] = useState('');
+    const [otpToken, setOtpToken] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
-    // Country codes
-    const countryCodes = [
-        { code: '+1', country: 'US' },
-        { code: '+44', country: 'UK' },
-        { code: '+91', country: 'India' }
-    ];
-
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSendOTP = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(formData.email)) {
+                throw new Error('Please enter a valid email address.');
+            }
+
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-otp-email`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                },
+                body: JSON.stringify({ email: formData.email }),
+            });
+
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'Failed to send OTP');
+
+            setOtpToken(data.token);
+            setStep(2);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleVerifyOTP = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-otp-email`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                },
+                body: JSON.stringify({
+                    email: formData.email,
+                    otp,
+                    token: otpToken,
+                }),
+            });
+
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'OTP verification failed');
+
+            setStep(3);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleFormSubmit = async (e) => {
@@ -38,187 +95,109 @@ const Signup = () => {
         setLoading(true);
 
         try {
-            // Validate form
-            if (!formData.firstName || !formData.lastName || !formData.email || !formData.mobileNumber) {
-                throw new Error('Please fill in all required fields');
+            if (!formData.firstName || !formData.lastName || !formData.mobileNumber || !formData.experience || !formData.domain) {
+                throw new Error('Please fill in all required fields.');
             }
 
-            // Validate email format
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(formData.email)) {
-                throw new Error('Please enter a valid email address');
+            // Set password as requested: firstname@123
+            const generatedPassword = `${formData.firstName.toLowerCase()}@123`;
+
+            // Step 1: Create Supabase Auth user
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: formData.email,
+                password: generatedPassword,
+                options: {
+                    data: {
+                        first_name: formData.firstName,
+                        last_name: formData.lastName,
+                    }
+                }
+            });
+
+            if (authError) throw authError;
+
+            // Step 2: Insert profile
+            if (!authData?.user) {
+                console.error('No user object returned from signUp');
+                throw new Error('User creation failed. This email might already be registered.');
             }
 
-            // Move to payment step (profile will be created after successful payment)
-            setStep(2);
+            console.log('Attempting to create profile for:', authData.user.id);
+            
+            const profileData = {
+                id: authData.user.id,
+                email: formData.email,
+                first_name: formData.firstName,
+                last_name: formData.lastName,
+                mobile_number: formData.mobileNumber,
+                country_code: formData.countryCode, // Now provided
+                experience: formData.experience,
+                domain: formData.domain,
+                payment_status: 'pending',
+                role: 'user',
+                updated_at: new Date().toISOString(),
+            };
+
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .upsert(profileData, { onConflict: 'id' });
+
+            if (profileError) {
+                console.error('❌ Profile Insert Failed:', profileError);
+                // RETRY: Minimal insert MUST include NOT NULL fields (first_name, last_name, mobile_number, country_code)
+                console.log('Retrying with required profile data...');
+                const { error: retryError } = await supabase
+                    .from('profiles')
+                    .insert({ 
+                        id: authData.user.id, 
+                        email: formData.email,
+                        first_name: formData.firstName,
+                        last_name: formData.lastName,
+                        mobile_number: formData.mobileNumber,
+                        country_code: formData.countryCode,
+                        payment_status: 'pending' 
+                    });
+                
+                if (retryError && retryError.code !== '23505') {
+                    throw new Error(`Profile creation failed: ${retryError.message}`);
+                }
+            }
+            
+            console.log('✅ Profile step completed');
+
+            // Step 3: Send Welcome Email
+            try {
+                await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-welcome-email`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                    },
+                    body: JSON.stringify({
+                        email: formData.email,
+                        firstName: formData.firstName,
+                        password: generatedPassword
+                    }),
+                });
+            } catch (emailErr) {
+                console.warn('Welcome email failed, but account is ready:', emailErr);
+            }
+
+            setStep(4);
         } catch (err) {
-            setError(err.message || 'An error occurred. Please try again.');
+            setError(err.message);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const [paypalLoading, setPaypalLoading] = useState(true);
-    const [paypalReady, setPaypalReady] = useState(false);
-
-    // Load PayPal SDK
-    useEffect(() => {
-        if (step === 2) {
-            const clientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
-
-            if (!clientId) {
-                setError('PayPal Client ID is not configured. Please contact support.');
-                setPaypalLoading(false);
-                return;
-            }
-
-            // Check if PayPal already loaded
-            if (window.paypal) {
-                console.log('PayPal SDK already loaded');
-                setPaypalReady(true);
-                setPaypalLoading(false);
-                return;
-            }
-
-            // Check if script already exists
-            const existingScript = document.querySelector('script[src*="paypal.com/sdk/js"]');
-            if (existingScript) {
-                // Wait for it to load
-                existingScript.addEventListener('load', () => {
-                    setPaypalReady(true);
-                    setPaypalLoading(false);
-                });
-                return;
-            }
-
-            const script = document.createElement('script');
-            script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD`;
-            script.async = true;
-
-            script.onload = () => {
-                console.log('PayPal SDK loaded successfully');
-                setPaypalReady(true);
-                setPaypalLoading(false);
-            };
-
-            script.onerror = (err) => {
-                console.error('Failed to load PayPal SDK:', err);
-                setPaypalLoading(false);
-                setError('Failed to load PayPal. Please check your internet connection and try again.');
-            };
-
-            document.body.appendChild(script);
-        }
-    }, [step]);
-
-    // Render PayPal buttons when SDK is ready
-    useEffect(() => {
-        if (paypalReady && step === 2) {
-            // Small delay to ensure DOM is ready
-            const timer = setTimeout(() => {
-                renderPayPalButtons();
-            }, 100);
-            return () => clearTimeout(timer);
-        }
-    }, [paypalReady, step]);
-
-    const renderPayPalButtons = () => {
-        if (window.paypal && document.getElementById('paypal-button-container')) {
-            window.paypal.Buttons({
-                createOrder: async () => {
-                    try {
-                        console.log('Creating PayPal order...');
-                        console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
-                        console.log('PayPal Client ID:', import.meta.env.VITE_PAYPAL_CLIENT_ID);
-
-                        const response = await fetch(
-                            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-paypal-order`,
-                            {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-                                },
-                                body: JSON.stringify({
-                                    amount: '30.00',
-                                    currency: 'USD'
-                                })
-                            }
-                        );
-
-                        console.log('Response status:', response.status);
-                        const data = await response.json();
-                        console.log('Response data:', data);
-
-                        if (data.id) {
-                            console.log('Order created successfully:', data.id);
-                            return data.id;
-                        } else {
-                            throw new Error(data.error || 'Failed to create order');
-                        }
-                    } catch (error) {
-                        console.error('Error creating order:', error);
-                        setError(`Failed to create payment order: ${error.message}`);
-                        throw error;
-                    }
-                },
-                onApprove: async (data) => {
-                    try {
-                        console.log('Payment approved, capturing order:', data.orderID);
-                        setLoading(true);
-                        setError('');
-
-                        const response = await fetch(
-                            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capture-paypal-order`,
-                            {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-                                },
-                                body: JSON.stringify({
-                                    orderId: data.orderID,
-                                    email: formData.email,
-                                    firstName: formData.firstName,
-                                    lastName: formData.lastName,
-                                    mobileNumber: formData.mobileNumber,
-                                    countryCode: formData.countryCode,
-                                    promoCode: formData.promoCode
-                                })
-                            }
-                        );
-
-                        console.log('Capture response status:', response.status);
-                        const result = await response.json();
-                        console.log('Capture result:', result);
-
-                        if (result.success) {
-                            console.log('Payment captured successfully!');
-                            setPaymentData(result);
-                            setStep(3); // Move to success page
-                        } else {
-                            throw new Error(result.error || 'Payment capture failed');
-                        }
-                    } catch (error) {
-                        console.error('Error capturing payment:', error);
-                        setError(`Payment processing failed: ${error.message}`);
-                    } finally {
-                        setLoading(false);
-                    }
-                },
-                onError: (err) => {
-                    console.error('PayPal error:', err);
-                    setError(`Payment failed: ${err.message || 'Unknown error. Please try again.'}`);
-                }
-            }).render('#paypal-button-container');
         }
     };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black opacity-30"></div>
+            {/* DEBUG VERSION: 1.1 */}
+            <div className="hidden">Signup Version 1.1 - Added Experience/Domain</div>
 
-            <div className="relative card max-w-2xl w-full">
+            <div className="relative card max-w-lg w-full">
                 {/* Logo */}
                 <div className="text-center mb-8">
                     <Link to="/" className="inline-flex items-center space-x-2">
@@ -229,14 +208,14 @@ const Signup = () => {
                     </Link>
                 </div>
 
+                {/* ─── STEP 1: Email Input ─── */}
                 {step === 1 && (
-                    // Step 1: Form Page
                     <div>
-                        <h1 className="text-3xl font-bold text-primary-dark mb-4 text-center">
-                            Get Access to 500,000+ Jobs
+                        <h1 className="text-3xl font-bold text-primary-dark mb-2 text-center">
+                            Get Access
                         </h1>
-                        <p className="text-gray-600 text-center mb-8">
-                            Fill in your details to proceed
+                        <p className="text-gray-500 text-center mb-8">
+                            Verify your email to start your registration
                         </p>
 
                         {error && (
@@ -245,103 +224,33 @@ const Signup = () => {
                             </div>
                         )}
 
-                        <form onSubmit={handleFormSubmit} className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        First Name *
-                                    </label>
+                        <form onSubmit={handleSendOTP} className="space-y-4">
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input
-                                        type="text"
-                                        name="firstName"
-                                        value={formData.firstName}
+                                        type="email"
+                                        name="email"
+                                        value={formData.email}
                                         onChange={handleInputChange}
                                         required
-                                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
-                                        placeholder="John"
+                                        className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                                        placeholder="john.doe@example.com"
                                     />
                                 </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Last Name *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="lastName"
-                                        value={formData.lastName}
-                                        onChange={handleInputChange}
-                                        required
-                                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
-                                        placeholder="Doe"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Email *
-                                </label>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleInputChange}
-                                    required
-                                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
-                                    placeholder="john.doe@example.com"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Mobile Number *
-                                </label>
-                                <div className="flex gap-2">
-                                    <select
-                                        name="countryCode"
-                                        value={formData.countryCode}
-                                        onChange={handleInputChange}
-                                        className="px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow bg-white"
-                                    >
-                                        {countryCodes.map((item) => (
-                                            <option key={item.code} value={item.code}>
-                                                {item.country} ({item.code})
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <input
-                                        type="tel"
-                                        name="mobileNumber"
-                                        value={formData.mobileNumber}
-                                        onChange={handleInputChange}
-                                        required
-                                        className="flex-1 px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
-                                        placeholder="1234567890"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Promo Code (Optional)
-                                </label>
-                                <input
-                                    type="text"
-                                    name="promoCode"
-                                    value={formData.promoCode}
-                                    onChange={handleInputChange}
-                                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
-                                    placeholder="Enter promo code"
-                                />
                             </div>
 
                             <button
                                 type="submit"
-                                className="w-full btn-primary text-lg"
+                                className="w-full btn-primary text-lg flex items-center justify-center gap-2 py-3"
                                 disabled={loading}
                             >
-                                {loading ? 'Processing...' : 'Proceed to Payment'}
+                                {loading ? (
+                                    <><Loader2 className="animate-spin w-5 h-5" /> Sending OTP...</>
+                                ) : (
+                                    <><span>Send OTP</span><ArrowRight className="w-5 h-5" /></>
+                                )}
                             </button>
                         </form>
 
@@ -356,47 +265,15 @@ const Signup = () => {
                     </div>
                 )}
 
+                {/* ─── STEP 2: OTP Verification ─── */}
                 {step === 2 && (
-                    // Step 2: Payment Section
                     <div>
-                        <h1 className="text-3xl font-bold text-primary-dark mb-4 text-center">
-                            Complete Your Payment
+                        <h1 className="text-3xl font-bold text-primary-dark mb-2 text-center">
+                            Verify OTP
                         </h1>
-
-                        <div className="bg-gray-50 rounded-lg p-6 mb-6">
-                            <p className="text-center text-xl font-semibold text-primary-dark mb-4">
-                                30-day free trial, then $30 USD/month
-                            </p>
-
-                            <div className="space-y-3">
-                                {[
-                                    '500,000+ verified open roles',
-                                    'H-1B, OPT/CPT, TN, E-3, J-1 & Green Cards',
-                                    'Constantly updated with new jobs',
-                                    'Salary & company info for every role',
-                                    'Verified email of a real company contact',
-                                    'Cancel anytime',
-                                ].map((feature, index) => (
-                                    <div key={index} className="flex items-center space-x-3">
-                                        <Check className="w-5 h-5 text-accent-green flex-shrink-0" />
-                                        <span className="text-gray-700">{feature}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Testimonial */}
-                        <div className="border-l-4 border-primary-yellow bg-gray-50 p-4 mb-6">
-                            <div className="flex mb-2">
-                                {[...Array(5)].map((_, i) => (
-                                    <Star key={i} className="w-4 h-4 text-primary-yellow fill-current" />
-                                ))}
-                            </div>
-                            <p className="text-gray-700 italic text-sm mb-2">
-                                "This platform helped me land my dream job at Microsoft! Highly recommended!"
-                            </p>
-                            <p className="text-sm font-semibold text-gray-800">- Rajesh K., Software Engineer</p>
-                        </div>
+                        <p className="text-gray-500 text-center mb-8">
+                            Enter the 6-digit code sent to <strong>{formData.email}</strong>
+                        </p>
 
                         {error && (
                             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -404,33 +281,157 @@ const Signup = () => {
                             </div>
                         )}
 
-                        {/* PayPal Button Container */}
-                        {paypalLoading && (
-                            <div className="mb-4 p-6 bg-gray-50 rounded-lg text-center">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-yellow mx-auto mb-2"></div>
-                                <p className="text-gray-600">Loading PayPal...</p>
+                        <form onSubmit={handleVerifyOTP} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">6-Digit Code</label>
+                                <input
+                                    type="text"
+                                    maxLength={6}
+                                    value={otp}
+                                    onChange={(e) => setOtp(e.target.value)}
+                                    required
+                                    className="w-full px-4 py-4 text-center text-3xl font-bold tracking-widest rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                                    placeholder="000000"
+                                />
                             </div>
-                        )}
-                        <div
-                            id="paypal-button-container"
-                            className="mb-4"
-                            style={{ display: paypalLoading ? 'none' : 'block' }}
-                        ></div>
 
-                        {loading && (
-                            <div className="text-center py-4">
-                                <p className="text-gray-600">Processing payment...</p>
-                            </div>
-                        )}
-
-                        <p className="text-center text-sm text-gray-500">
-                            Customer: {formData.firstName} {formData.lastName} ({formData.email})
-                        </p>
+                            <button
+                                type="submit"
+                                className="w-full btn-primary text-lg flex items-center justify-center gap-2 py-3"
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <><Loader2 className="animate-spin w-5 h-5" /> Verifying...</>
+                                ) : (
+                                    <><span>Verify Code</span><ArrowRight className="w-5 h-5" /></>
+                                )}
+                            </button>
+                            
+                            <button 
+                                type="button"
+                                onClick={() => setStep(1)}
+                                className="w-full text-sm text-gray-500 hover:text-gray-700 font-medium py-2"
+                            >
+                                Change Email
+                            </button>
+                        </form>
                     </div>
                 )}
 
-                {step === 3 && paymentData && (
-                    // Step 3: Success Card
+                {/* ─── STEP 3: Registration Form ─── */}
+                {step === 3 && (
+                    <div>
+                        <h1 className="text-3xl font-bold text-primary-dark mb-2 text-center">
+                            Complete Your Profile
+                        </h1>
+                        <p className="text-gray-500 text-center mb-8">
+                            Verified Email: <strong>{formData.email}</strong>
+                        </p>
+
+                        {error && (
+                            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                                {error}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleFormSubmit} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                                    <div className="relative">
+                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            name="firstName"
+                                            value={formData.firstName}
+                                            onChange={handleInputChange}
+                                            required
+                                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                                            placeholder="John"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                                    <input
+                                        type="text"
+                                        name="lastName"
+                                        value={formData.lastName}
+                                        onChange={handleInputChange}
+                                        required
+                                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                                        placeholder="Doe"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number *</label>
+                                <div className="phone-input-container">
+                                    <PhoneInput
+                                        defaultCountry="in"
+                                        value={formData.mobileNumber}
+                                        onChange={(phone, meta) => {
+                                            setFormData(prev => ({ 
+                                                ...prev, 
+                                                mobileNumber: phone,
+                                                countryCode: meta.country.dialCode
+                                            }))
+                                        }}
+                                        inputClassName="w-full !pl-14 !py-3 !h-[46px] !rounded-lg !border-gray-300"
+                                        className="w-full"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Experience *</label>
+                                    <select
+                                        name="experience"
+                                        value={formData.experience}
+                                        onChange={handleInputChange}
+                                        required
+                                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow bg-white"
+                                    >
+                                        <option value="">Select Level</option>
+                                        <option value="Fresher">Fresher (0 years)</option>
+                                        <option value="Junior">Junior (1-3 years)</option>
+                                        <option value="Middle">Middle (4-7 years)</option>
+                                        <option value="Senior">Senior (8+ years)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Domain *</label>
+                                    <input
+                                        type="text"
+                                        name="domain"
+                                        value={formData.domain}
+                                        onChange={handleInputChange}
+                                        required
+                                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
+                                        placeholder="e.g. IT, Healthcare"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="w-full btn-primary text-lg flex items-center justify-center gap-2 py-3"
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <><Loader2 className="animate-spin w-5 h-5" /> Creating Account...</>
+                                ) : (
+                                    <><span>Complete Registration</span><ArrowRight className="w-5 h-5" /></>
+                                )}
+                            </button>
+                        </form>
+                    </div>
+                )}
+
+                {/* ─── STEP 4: Success ─── */}
+                {step === 4 && (
                     <div className="text-center">
                         <div className="mb-6 flex justify-center">
                             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
@@ -438,55 +439,33 @@ const Signup = () => {
                             </div>
                         </div>
 
-                        <h1 className="text-3xl font-bold text-green-600 mb-4">
-                            Payment Successful! 🎉
+                        <h1 className="text-3xl font-bold text-green-600 mb-3">
+                            Check Your Email! 📧
                         </h1>
-
                         <p className="text-gray-600 mb-6">
-                            Thank you for your subscription. Your account is now active!
+                            Welcome, <strong>{formData.firstName}</strong>! Your account has been created successfully.<br />
+                            We've sent your <strong>login password</strong> to your email.
                         </p>
 
-                        <div className="bg-gray-50 rounded-lg p-6 mb-6 text-left">
-                            <h3 className="text-lg font-semibold text-primary-dark mb-4">Transaction Details</h3>
-                            <div className="space-y-2">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Transaction ID:</span>
-                                    <span className="font-medium text-gray-900">{paymentData.transactionId}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Order ID:</span>
-                                    <span className="font-medium text-gray-900">{paymentData.orderId}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Amount:</span>
-                                    <span className="font-medium text-gray-900">{paymentData.currency} {paymentData.amount}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Date:</span>
-                                    <span className="font-medium text-gray-900">
-                                        {new Date(paymentData.timeOfPayment).toLocaleDateString()}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                            <p className="text-sm text-blue-800">
-                                📧 Your login credentials have been sent to <strong>{formData.email}</strong>
-                            </p>
-                            <p className="text-xs text-blue-700 mt-2">
-                                <strong>Note:</strong> If you don't see the email in your inbox, please check your spam or junk mail folder.
-                            </p>
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-left">
+                            <p className="text-sm font-semibold text-yellow-800 mb-2">🔓 What happens next?</p>
+                            <ul className="text-sm text-yellow-700 space-y-1">
+                                <li>• Check your inbox (and spam) for your password</li>
+                                <li>• Log in to explore the teaser dashboard</li>
+                                <li>• Unlock <strong>full access</strong> via the payment page</li>
+                            </ul>
                         </div>
 
                         <button
                             onClick={() => navigate('/login')}
-                            className="w-full btn-primary text-lg"
+                            className="w-full btn-primary text-lg flex items-center justify-center gap-2 py-3"
                         >
-                            Click Here to Login
+                            <span>Log In with Password</span>
+                            <ArrowRight className="w-5 h-5" />
                         </button>
                     </div>
                 )}
+
             </div>
         </div>
     );

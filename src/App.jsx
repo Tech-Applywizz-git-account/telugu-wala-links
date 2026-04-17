@@ -7,6 +7,7 @@ import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
 import JobSearch from './pages/JobSearch';
 import Dashboard from './pages/Dashboard';
+import Payment from './pages/Payment';
 import { AuthProvider } from './hooks/useAuth';
 import './index.css';
 
@@ -24,6 +25,7 @@ function App() {
             <Route path="/search" element={<JobSearch />} />
             <Route path="/jobs" element={<JobSearch />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/payment" element={<Payment />} />
           </Routes>
         </div>
       </AuthProvider>
@@ -32,4 +34,3 @@ function App() {
 }
 
 export default App;
-

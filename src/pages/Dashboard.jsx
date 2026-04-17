@@ -664,38 +664,33 @@ import {
   Search,
   Shield,
   List,
+  Lock,
+  ChevronRight,
+  CheckCircle,
+  Menu,
+  X,
 } from "lucide-react";
-import AdminControls from "../components/AdminControls";
-import AdminOverview from "../components/AdminOverview";
-import AllJobsTab from "../components/AllJobsTab";
-import SavedJobsTab from "../components/SavedJobsTab";
-import AppliedJobsTab from "../components/AppliedJobsTab";
-import BillingTab from "../components/BillingTab";
-import ProfileTab from "../components/ProfileTab";
-import RenewalPayment from "../components/RenewalPayment";
+import { supabase } from '../supabaseClient';
+import AdminOverview from '../components/AdminOverview';
+import ProfileTab from '../components/ProfileTab';
+import SavedJobsTab from '../components/SavedJobsTab';
+import AppliedJobsTab from '../components/AppliedJobsTab';
+import AllJobsTab from '../components/AllJobsTab';
+import AdminControls from '../components/AdminControls';
+import TeaserDashboard from '../components/TeaserDashboard';
 import useAuth from "../hooks/useAuth";
-import { supabase } from "../supabaseClient";
-import { CheckCircle } from "lucide-react";
 
 const Dashboard = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState(location.state?.initialTab || "overview");
-  const { role, loading, user, signOut, isAdmin, subscriptionExpired, subscriptionEndDate, checkingSub } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { role, loading, user, signOut, isAdmin, subscriptionExpired, subscriptionEndDate, checkingSub, isPendingPayment } = useAuth();
   const navigate = useNavigate();
 
   const [savedJobsCount, setSavedJobsCount] = useState(0);
-  const [showRenewalFlow, setShowRenewalFlow] = useState(false);
-  const [renewalStep, setRenewalStep] = useState(1);
-  const [renewProfile, setRenewProfile] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    location: ''
-  });
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [renewError, setRenewError] = useState('');
-  const [renewLoading, setRenewLoading] = useState(false);
+  const [userAppliedJobs, setUserAppliedJobs] = useState([]);
+  const [userSavedJobs, setUserSavedJobs] = useState([]);
+  const [availableJobsCount, setAvailableJobsCount] = useState(0);
 
   // Sync activeTab with location state
   useEffect(() => {
@@ -704,63 +699,6 @@ const Dashboard = () => {
     }
   }, [location.state]);
 
-  // Redirect 'All Jobs' to Homepage only if NOT expired
-  useEffect(() => {
-    if (activeTab === 'alljobs' && !subscriptionExpired && !isAdmin) {
-      navigate('/');
-    }
-  }, [activeTab, navigate, subscriptionExpired, isAdmin]);
-
-
-  const handleRenewClick = async () => {
-    setRenewLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (error) throw error;
-
-      setRenewProfile({
-        firstName: data.first_name || '',
-        lastName: data.last_name || '',
-        email: data.email || user.email || '',
-        phone: data.phone || '',
-        location: data.location || ''
-      });
-      setShowRenewalFlow(true);
-      setRenewalStep(1);
-    } catch (err) {
-      console.error('Error fetching profile for renewal:', err);
-    } finally {
-      setRenewLoading(false);
-    }
-  };
-
-  const handleUpdateProfileAndProceed = async () => {
-    setRenewLoading(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          first_name: renewProfile.firstName,
-          last_name: renewProfile.lastName,
-          mobile_number: renewProfile.phone
-        })
-        .eq('id', user.id);
-
-      if (error) throw error;
-      setRenewalStep(2);
-    } catch (err) {
-      console.error('Error updating profile:', err);
-      setRenewError('Failed to update profile details.');
-    } finally {
-      setRenewLoading(false);
-    }
-  };
-
   // Authentication redirect
   useEffect(() => {
     if (!loading && !user) {
@@ -768,80 +706,91 @@ const Dashboard = () => {
     }
   }, [loading, user, navigate]);
 
-  // Fetch saved jobs count
+  // Default pending-payment users to 'alljobs' tab
   useEffect(() => {
-    if (user) {
-      fetchSavedJobsCount();
+    if (!loading && isPendingPayment && !location.state?.initialTab) {
+      setActiveTab('alljobs');
     }
-  }, [user]);
+  }, [loading, isPendingPayment]);
 
-  const fetchSavedJobsCount = async () => {
+  // Fetch dashboard data only for paying users (skip heavy queries for teaser)
+  useEffect(() => {
+    if (user && !isPendingPayment) {
+      fetchDashboardData();
+    }
+  }, [user, isPendingPayment]);
+
+  const fetchDashboardData = async () => {
     try {
-      const { count, error } = await supabase
+      const { count: savedCount } = await supabase
         .from('saved_jobs')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
+      setSavedJobsCount(savedCount || 0);
+      setUserSavedJobs(new Array(savedCount || 0).fill({}));
 
-      if (error) throw error;
-      setSavedJobsCount(count || 0);
+      const { data: appliedData } = await supabase
+        .from('applied_jobs')
+        .select('*, job_data') // job_data field stores the job info
+        .eq('user_id', user.id);
+      setUserAppliedJobs(appliedData || []);
+
+      const { count: jobsCount } = await supabase
+        .from('job_jobrole_all')
+        .select('*', { count: 'exact', head: true });
+      setAvailableJobsCount(jobsCount || 0);
     } catch (err) {
-      console.error('Error fetching saved jobs count:', err);
-      setSavedJobsCount(0);
+      console.error('Error fetching dashboard data:', err);
     }
   };
 
-  // Determine admin status from role
-
-  console.log(
-    "🔍 Dashboard ==> user:",
-    user?.email,
-    "| role:",
-    role,
-    "| isAdmin:",
-    isAdmin
-  );
-
-  // Show loading while auth context initializes
-  if (loading || (user && checkingSub)) {
+  // Full-screen block ONLY while session check runs (very fast — milliseconds)
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-dark mb-4"></div>
-          <p className="text-gray-500 font-medium">Verifying account access...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-yellow-500 mb-3"></div>
+          <p className="text-gray-500 text-sm font-medium">Loading...</p>
         </div>
       </div>
     );
   }
 
-  const tabs = [
-    { id: "overview", label: "Overview", icon: Search },
-    { id: "alljobs", label: "All Jobs", icon: List },
-    { id: "saved", label: "Saved Jobs", icon: Heart },
-    { id: "applied", label: "Applied Jobs", icon: Briefcase },
-    { id: "profile", label: "Profile", icon: User },
-    // { id: "settings", label: "Settings", icon: Settings },
-    { id: "billing", label: "Billing", icon: CreditCard },
-    ...(isAdmin ? [{ id: "admin", label: "Admin Controls", icon: Shield }] : []),
-  ];
+  // Pending-payment users only see All Jobs + Profile
+  const tabs = isPendingPayment
+    ? [
+        { id: "alljobs", label: "All Jobs", icon: List },
+        { id: "profile", label: "Profile", icon: User },
+      ]
+    : [
+        { id: "overview", label: "Overview", icon: Search },
+        // All Jobs navigates to homepage (full job links) for paying users
+        { id: "alljobs", label: "All Jobs", icon: List, action: () => navigate('/') },
+        { id: "saved", label: "Saved Jobs", icon: Heart },
+        { id: "applied", label: "Applied Jobs", icon: Briefcase },
+        { id: "profile", label: "Profile", icon: User },
+        ...(isAdmin ? [{ id: "admin", label: "Admin Controls", icon: Shield }] : []),
+      ];
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       <Navbar />
 
-      {/* Debug Info
-      {process.env.NODE_ENV === "development" && (
-        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-2 text-center text-sm">
-          <p className="font-semibold">
-            🔎 Role Debug → role: {role || "null"} | localStorage:
-            {immediateRole} | Final: {currentRole}
-          </p>
-        </div>
-      )} */}
-
       {/* Layout */}
-      <div className="flex flex-1">
+      <div className="flex flex-1 relative">
+        {/* Mobile Sidebar Overlay */}
+        {isMobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
-        <aside className="w-64 fixed top-[80px] left-0 h-[calc(100vh-80px)] bg-white border-r border-gray-200 p-6 overflow-y-auto shadow-sm">
+        <aside className={`
+          w-64 fixed top-[64px] left-0 h-[calc(100vh-64px)] bg-white border-r border-gray-200 p-6 overflow-y-auto shadow-sm z-30 transition-transform duration-300
+          ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+        `}>
           <div className="mb-8">
             <h2 className="text-lg font-semibold text-gray-700 mb-2">
               Telugu Wala Links
@@ -861,9 +810,16 @@ const Dashboard = () => {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    if (tab.action) {
+                      tab.action();
+                    } else {
+                      setActiveTab(tab.id);
+                    }
+                    setIsMobileMenuOpen(false); // Close menu on tab selection
+                  }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all 
-                    ${isActive
+                    ${isActive && !tab.action
                       ? "bg-yellow-300 text-gray-900 font-semibold shadow-sm"
                       : "text-gray-600 hover:bg-gray-100"
                     }`}
@@ -877,7 +833,6 @@ const Dashboard = () => {
             {/* Logout */}
             <button
               onClick={async () => {
-                console.log("🚨 Logout button clicked in Dashboard");
                 await signOut();
                 navigate("/", { replace: true });
               }}
@@ -892,9 +847,18 @@ const Dashboard = () => {
         </aside>
 
         {/* Main */}
-        <main className="flex-1 ml-64 p-10 overflow-y-auto">
+        <main className="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-10 overflow-y-auto w-full">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">
+            <div className="flex items-center gap-4 mb-4 lg:hidden">
+              <button 
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-md"
+              >
+                <Menu size={24} />
+              </button>
+              <span className="font-bold text-gray-800">Menu</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               Welcome back, {user?.email?.split("@")[0] || "User"}!
             </h1>
             <p className="text-gray-600 mt-2">
@@ -905,236 +869,145 @@ const Dashboard = () => {
           </div>
 
           {/* Main Content Area */}
-          {!isAdmin && subscriptionExpired && !["billing", "profile"].includes(activeTab) ? (
-            <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100 max-w-4xl mx-auto">
-              <div className="p-4 bg-red-50 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+          <>
+            {checkingSub ? (
+              // Profile is loading in background — show non-blocking verifying state
+              <div className="flex flex-col items-center justify-center py-28">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-yellow-500 mb-4"></div>
+                <p className="text-gray-600 font-semibold">Verifying your access...</p>
+                <p className="text-gray-400 text-sm mt-1">This takes just a moment</p>
               </div>
-              <h2 className="text-4xl font-bold text-gray-900 mb-2 font-display">Subscription Expired</h2>
-              <p className="text-sm text-gray-500 mb-2 italic">subscribe to get the access</p>
-              {subscriptionEndDate && (
-                <p className="text-xs text-red-400 mb-10 font-medium">Your access ended on {new Date(subscriptionEndDate).toLocaleDateString()}</p>
-              )}
-
-              {showRenewalFlow ? (
-                <div className="max-w-xl mx-auto p-4 text-left">
-                  {renewalStep === 1 && (
-                    <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-xl">
-                      <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-bold text-gray-900">Your Registration Details</h3>
-                        <button
-                          onClick={() => setIsEditingProfile(!isEditingProfile)}
-                          className="text-sm text-blue-600 font-semibold hover:underline bg-blue-50 px-3 py-1 rounded-full"
+            ) : isPendingPayment ? (
+              <>
+                {activeTab === "alljobs" && <TeaserDashboard />}
+                {activeTab === "profile" && <ProfileTab />}
+              </>
+            ) : (
+              <>
+                {activeTab === "overview" && (
+                  isAdmin ? (
+                    <AdminOverview />
+                  ) : (
+                    <>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                        Dashboard Overview
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div
+                          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer"
+                          onClick={() => setActiveTab("applied")}
                         >
-                          {isEditingProfile ? 'Save Changes' : 'Edit Details'}
-                        </button>
+                          <div className="bg-blue-50 w-12 h-12 rounded-xl flex items-center justify-center mb-4">
+                            <Briefcase className="w-6 h-6 text-blue-600" />
+                          </div>
+                          <p className="text-gray-500 font-medium">Applied Jobs</p>
+                          <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                            {userAppliedJobs.length}
+                          </h3>
+                        </div>
+                        <div
+                          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer"
+                          onClick={() => setActiveTab("saved")}
+                        >
+                          <div className="bg-red-50 w-12 h-12 rounded-xl flex items-center justify-center mb-4">
+                            <Heart className="w-6 h-6 text-red-600" />
+                          </div>
+                          <p className="text-gray-500 font-medium">Saved Jobs</p>
+                          <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                            {userSavedJobs.length}
+                          </h3>
+                        </div>
+                        <div
+                          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer"
+                          onClick={() => setActiveTab("alljobs")}
+                        >
+                          <div className="bg-yellow-50 w-12 h-12 rounded-xl flex items-center justify-center mb-4">
+                            <List className="w-6 h-6 text-yellow-600" />
+                          </div>
+                          <p className="text-gray-500 font-medium">Available Jobs</p>
+                          <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                            {availableJobsCount.toLocaleString()}+
+                          </h3>
+                        </div>
                       </div>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-500 uppercase">First Name</label>
-                            <input
-                              type="text"
-                              value={renewProfile.firstName}
-                              disabled={!isEditingProfile}
-                              onChange={(e) => setRenewProfile({ ...renewProfile, firstName: e.target.value })}
-                              className={`w-full p-3 rounded-xl border transition-all ${!isEditingProfile ? 'bg-gray-50 border-gray-100 text-gray-700 font-medium' : 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-100'}`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-500 uppercase">Last Name</label>
-                            <input
-                              type="text"
-                              value={renewProfile.lastName}
-                              disabled={!isEditingProfile}
-                              onChange={(e) => setRenewProfile({ ...renewProfile, lastName: e.target.value })}
-                              className={`w-full p-3 rounded-xl border transition-all ${!isEditingProfile ? 'bg-gray-50 border-gray-100 text-gray-700 font-medium' : 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-100'}`}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-xs font-bold text-gray-500 uppercase">Email</label>
-                          <input type="text" value={renewProfile.email} disabled className="w-full p-3 rounded-xl border border-gray-100 bg-gray-50 text-gray-500 cursor-not-allowed" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-xs font-bold text-gray-500 uppercase">Phone</label>
-                          <input
-                            type="text"
-                            value={renewProfile.phone}
-                            disabled={!isEditingProfile}
-                            onChange={(e) => setRenewProfile({ ...renewProfile, phone: e.target.value })}
-                            className={`w-full p-3 rounded-xl border transition-all ${!isEditingProfile ? 'bg-gray-50 border-gray-100 text-gray-700 font-medium' : 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-100'}`}
-                          />
-                        </div>
 
-                        <div className="pt-6 border-t border-gray-100 mt-6">
-                          {renewError && <p className="text-red-500 text-sm mb-4 bg-red-50 p-3 rounded-lg border border-red-100">{renewError}</p>}
+                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-xl font-bold text-gray-900">
+                            Recent Applications
+                          </h3>
                           <button
-                            onClick={handleUpdateProfileAndProceed}
-                            disabled={renewLoading}
-                            className="w-full bg-primary-yellow text-primary-dark font-black text-lg py-4 rounded-xl hover:bg-yellow-400 transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                            onClick={() => setActiveTab("applied")}
+                            className="text-primary-blue hover:underline font-medium text-sm"
                           >
-                            {renewLoading ? 'Saving Info...' : 'Get Access'}
+                            View all
                           </button>
-                          <button onClick={() => setShowRenewalFlow(false)} className="w-full mt-4 text-gray-400 text-sm font-semibold hover:text-gray-600 transition-colors uppercase tracking-widest">Cancel Renewal</button>
                         </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {renewalStep === 2 && (
-                    <div className="bg-white p-10 rounded-2xl border border-gray-200 shadow-xl text-center">
-                      <h3 className="text-2xl font-bold text-gray-900 mb-2">Complete Your Payment</h3>
-                      <p className="text-gray-600 mb-8">Unlock full access for 1 month ($30.00)</p>
-                      <div className="max-w-sm mx-auto p-6 border-2 border-dashed border-gray-100 rounded-2xl bg-gray-50">
-                        <RenewalPayment
-                          user={user}
-                          profile={renewProfile}
-                          onSuccess={() => {
-                            setRenewalStep(3);
-                            setSubscriptionExpired(false);
-                            setTimeout(() => {
-                              setShowRenewalFlow(false);
-                              setActiveTab("billing");
-                            }, 3000);
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {renewalStep === 3 && (
-                    <div className="bg-white p-12 rounded-2xl border border-gray-200 shadow-xl text-center">
-                      <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CheckCircle size={40} />
-                      </div>
-                      <h3 className="text-3xl font-bold text-gray-900 mb-2">Payment Successful!</h3>
-                      <p className="text-gray-600 text-lg">Your subscription is now active. Enjoy your access!</p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <button
-                  onClick={handleRenewClick}
-                  className="px-12 py-5 bg-primary-yellow text-primary-dark font-black text-xl rounded-2xl shadow-2xl hover:bg-yellow-400 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center gap-3 mx-auto"
-                >
-                  Get Access
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          ) : (
-            <>
-              {activeTab === "overview" && (
-                isAdmin ? (
-                  <AdminOverview />
-                ) : (
-                  <>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                      Dashboard Overview
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                      <div
-                        onClick={() => setActiveTab("saved")}
-                        className="bg-white p-6 rounded-lg shadow-md border cursor-pointer hover:border-yellow-400 hover:shadow-lg transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-gray-500 text-sm font-medium">Saved Jobs</p>
-                            <p className="text-2xl font-bold mt-2 text-gray-900">{savedJobsCount}</p>
+                        {userAppliedJobs.length > 0 ? (
+                          <div className="space-y-4">
+                            {userAppliedJobs.slice(0, 3).map((job) => (
+                              <div
+                                key={job.id}
+                                className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className="bg-white p-2 rounded-lg border border-gray-200">
+                                    <Briefcase className="w-6 h-6 text-gray-400" />
+                                  </div>
+                                  <div>
+                                    <h4 className="font-bold text-gray-900">
+                                      {job.job_data?.title}
+                                    </h4>
+                                    <p className="text-sm text-gray-500">
+                                      {job.job_data?.company}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm font-medium text-gray-900 capitalize">
+                                    {job.status || "Applied"}
+                                  </p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {new Date(job.created_at).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <div className="p-3 bg-green-50 rounded-full">
-                            <Heart className="h-6 w-6 text-green-500" />
+                        ) : (
+                          <div className="text-center py-8">
+                            <p className="text-gray-500">No applications yet.</p>
+                            <button
+                              onClick={() => setActiveTab("alljobs")}
+                              className="text-primary-blue hover:underline mt-2 text-sm font-medium"
+                            >
+                              Explore jobs
+                            </button>
                           </div>
-                        </div>
+                        )}
                       </div>
+                    </>
+                  )
+                )}
 
-                      <div
-                        onClick={() => setActiveTab("applied")}
-                        className="bg-white p-6 rounded-lg shadow-md border cursor-pointer hover:border-yellow-400 hover:shadow-lg transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-gray-500 text-sm font-medium">Applied Jobs</p>
-                            <p className="text-2xl font-bold mt-2 text-gray-900">0</p>
-                          </div>
-                          <div className="p-3 bg-blue-50 rounded-full">
-                            <Briefcase className="h-6 w-6 text-blue-500" />
-                          </div>
-                        </div>
-                      </div>
+                {activeTab === "saved" && (
+                  <SavedJobsTab />
+                )}
 
-                      <div
-                        onClick={() => setActiveTab("profile")}
-                        className="bg-white p-6 rounded-lg shadow-md border cursor-pointer hover:border-yellow-400 hover:shadow-lg transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-gray-500 text-sm font-medium">Account Type</p>
-                            <p className="text-2xl font-bold mt-2 text-gray-900">{isAdmin ? "Admin" : "Standard"}</p>
-                          </div>
-                          <div className="p-3 bg-purple-50 rounded-full">
-                            <User className="h-6 w-6 text-purple-500" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-lg shadow-md border">
-                      <h3 className="text-xl font-semibold mb-4">Recent Activity</h3>
-                      <p className="text-gray-600">No recent activity to display.</p>
-                    </div>
-                  </>
-                )
-              )}
+                {activeTab === "applied" && (
+                  <AppliedJobsTab />
+                )}
 
-              {activeTab === "saved" && (
-                <SavedJobsTab />
-              )}
+                {activeTab === "profile" && (
+                  <ProfileTab />
+                )}
 
-              {activeTab === "applied" && (
-                <AppliedJobsTab />
-              )}
-
-              {activeTab === "profile" && (
-                <ProfileTab />
-              )}
-
-              {activeTab === "settings" && (
-                <>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                    Account Settings
-                  </h2>
-                  <div className="bg-white p-6 rounded-lg shadow-md border">
-                    <p className="text-gray-600">
-                      Notification settings and account configuration.
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {activeTab === "billing" && (
-                <BillingTab />
-              )}
-
-              {activeTab === "admin" && isAdmin && (
-                <>
-                  <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      Admin Controls
-                    </h2>
-                    <p className="text-gray-600">
-                      Manage users, jobs, and platform settings
-                    </p>
-                  </div>
+                {activeTab === "admin" && isAdmin && (
                   <AdminControls />
-                </>
-              )}
-            </>
-          )}
+                )}
+              </>
+            )}
+          </>
         </main>
       </div>
     </div>
