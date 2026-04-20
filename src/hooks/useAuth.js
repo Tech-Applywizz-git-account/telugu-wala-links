@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
     try {
       const profileQuery = supabase
         .from("profiles")
-        .select("role, payment_status")
+        .select("role, payment_status, subscription_end_date")
         .eq("id", userId)
         .maybeSingle();
 
@@ -67,6 +67,9 @@ export function AuthProvider({ children }) {
       setCheckingSub(false);
     }
   };
+
+  const subscriptionEndDate = profile?.subscription_end_date ? new Date(profile.subscription_end_date) : null;
+  const subscriptionExpired = subscriptionEndDate ? subscriptionEndDate < new Date() : false;
 
   useEffect(() => {
     // 1. Initial Session Check — only waits for getSession(), NOT fetchProfile
@@ -122,7 +125,9 @@ export function AuthProvider({ children }) {
     profile, // Exported
     isAdmin: role === "admin",
     paymentStatus,
-    isPendingPayment: paymentStatus !== 'completed' && paymentStatus !== 'paid' && role !== 'admin',
+    subscriptionExpired,
+    subscriptionEndDate,
+    isPendingPayment: role !== 'admin' && (paymentStatus !== 'completed' && paymentStatus !== 'paid' || subscriptionExpired),
     refresh: () => user && fetchProfile(user.id),
     loading,
     checkingSub,

@@ -92,7 +92,7 @@ const Homepage = () => {
     return cachedTotal ? parseInt(cachedTotal, 10) : 0;
   });
 
-  const { user, role, isAdmin, subscriptionExpired, subscriptionEndDate, checkingSub } = useAuth();
+  const { user, role, isAdmin, subscriptionExpired, subscriptionEndDate, checkingSub, isPendingPayment } = useAuth();
   const navigate = useNavigate();
   const searchSectionRef = useRef(null);
 
@@ -183,6 +183,13 @@ const Homepage = () => {
       fetchSavedJobIds();
     }
   };
+  // Redirect unpaid users to dashboard immediately
+  useEffect(() => {
+    if (!loading && user && isPendingPayment && role !== 'admin') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [loading, user, isPendingPayment, role, navigate]);
+
   // Subscription check is now handled by useAuth hook
 
   // Fetch saved job IDs for the current user
@@ -700,6 +707,32 @@ const Homepage = () => {
 
               {/* Job Cards List */}
               <div className="mt-8 max-w-4xl mx-auto space-y-4">
+                {subscriptionExpired && user && (
+                  <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-lg shadow-sm">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <Lock className="h-5 w-5 text-red-500" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-red-700 font-bold">
+                          Subscription Expired
+                        </p>
+                        <p className="text-sm text-red-600">
+                          Your one-month subscription has ended. Subscribe again to get access to all job links.
+                        </p>
+                      </div>
+                      <div className="ml-auto pl-3">
+                        <button
+                          onClick={() => navigate('/payment')}
+                          className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 transition"
+                        >
+                          Renew Now
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {loading || (user && checkingSub) ? (
                   <div className="flex justify-center py-10">
                     <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />

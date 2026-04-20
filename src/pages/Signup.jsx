@@ -12,7 +12,7 @@ const Signup = () => {
         lastName: '',
         email: '',
         mobileNumber: '',
-        countryCode: '1', // Default to 1 (US) or 91 (India)
+        countryCode: '1', // Default to 1 (US)
         experience: '',
         domain: '',
     });
@@ -44,7 +44,7 @@ const Signup = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
                 },
-                body: JSON.stringify({ email: formData.email }),
+                body: JSON.stringify({ email: formData.email, mode: 'signup' }),
             });
 
             const data = await res.json();
@@ -369,7 +369,8 @@ const Signup = () => {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number *</label>
                                 <div className="phone-input-container">
                                     <PhoneInput
-                                        defaultCountry="in"
+                                        defaultCountry="us"
+                                        forceDialCode={true}
                                         value={formData.mobileNumber}
                                         onChange={(phone, meta) => {
                                             setFormData(prev => ({ 
@@ -378,8 +379,11 @@ const Signup = () => {
                                                 countryCode: meta.country.dialCode
                                             }))
                                         }}
-                                        inputClassName="w-full !pl-14 !py-3 !h-[46px] !rounded-lg !border-gray-300"
+                                        inputClassName="w-full !pl-14 !py-3 !h-[48px] !rounded-lg !border-gray-300 focus:!ring-2 focus:!ring-primary-yellow focus:!border-transparent"
                                         className="w-full"
+                                        countrySelectorStyleProps={{
+                                            buttonClassName: "!h-[48px] !bg-white !border-gray-300 !rounded-l-lg hover:!bg-gray-50",
+                                        }}
                                     />
                                 </div>
                             </div>

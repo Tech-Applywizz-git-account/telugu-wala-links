@@ -61,22 +61,31 @@ const Navbar = () => {
                         <span className="font-bold text-xl text-gray-900">Telugu Wala Links</span>
                     </Link>
 
-                    {/* CENTER Nav */}
-                    <div className="flex items-center gap-8">
-                        <button
-                            onClick={() => handleSectionClick('how-it-works')}
-                            className="text-gray-600 font-medium hover:text-gray-900 transition-colors py-2"
-                        >
-                            How it works
-                        </button>
+                    {/* CENTER Nav — Only show for guests */}
+                    {!user && (
+                        <div className="flex items-center gap-8">
+                            <button
+                                onClick={() => handleSectionClick('how-it-works')}
+                                className="text-gray-600 font-medium hover:text-gray-900 transition-colors py-2"
+                            >
+                                How it works
+                            </button>
 
-                        <button
-                            onClick={() => handleSectionClick('faq')}
-                            className="text-gray-600 font-medium hover:text-gray-900 transition-colors py-2"
-                        >
-                            FAQ
-                        </button>
-                    </div>
+                            <button
+                                onClick={() => handleSectionClick('faq')}
+                                className="text-gray-600 font-medium hover:text-gray-900 transition-colors py-2"
+                            >
+                                FAQ
+                            </button>
+
+                            <Link
+                                to="/pricing"
+                                className="text-gray-600 font-medium hover:text-gray-900 transition-colors py-2"
+                            >
+                                Pricing
+                            </Link>
+                        </div>
+                    )}
 
                     {/* RIGHT — Login / Profile */}
                     <div className="relative flex items-center gap-4">
@@ -166,21 +175,31 @@ const Navbar = () => {
             {/* -------- Mobile Dropdown -------- */}
             {isMenuOpen && (
                 <div className="md:hidden bg-white border-t border-gray-200 px-4 py-4 space-y-3">
-                    <button
-                        onClick={() => handleSectionClick('how-it-works')}
-                        className="block w-full text-left text-gray-600 font-medium hover:text-gray-900 py-2"
-                    >
-                        How it works
-                    </button>
+                    {!user && (
+                        <>
+                            <button
+                                onClick={() => handleSectionClick('how-it-works')}
+                                className="block w-full text-left text-gray-600 font-medium hover:text-gray-900 py-2"
+                            >
+                                How it works
+                            </button>
 
+                            <button
+                                onClick={() => handleSectionClick('faq')}
+                                className="block w-full text-left text-gray-600 font-medium hover:text-gray-900 py-2"
+                            >
+                                FAQ
+                            </button>
 
-
-                    <button
-                        onClick={() => handleSectionClick('faq')}
-                        className="block w-full text-left text-gray-600 font-medium hover:text-gray-900 py-2"
-                    >
-                        FAQ
-                    </button>
+                            <Link
+                                to="/pricing"
+                                className="block w-full text-left text-gray-600 font-medium hover:text-gray-900 py-2"
+                                onClick={() => setIsMenuOpen(false)}
+                            >
+                                Pricing
+                            </Link>
+                        </>
+                    )}
 
                     <div className="border-t border-gray-200 pt-3 mt-3">
                         {user ? (

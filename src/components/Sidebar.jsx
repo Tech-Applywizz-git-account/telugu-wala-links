@@ -117,7 +117,7 @@ import {
 import useAuth from '../hooks/useAuth';
 
 const Sidebar = ({ className = "", showHeader = true }) => {
-    const { role, signOut } = useAuth();
+    const { role, signOut, subscriptionExpired, isPendingPayment } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const [mounted, setMounted] = useState(false);
@@ -173,8 +173,23 @@ const Sidebar = ({ className = "", showHeader = true }) => {
         // { id: "settings", label: "Settings", icon: Settings },
     ];
 
-    const adminTab = { id: "admin", label: "Admin Controls", icon: Shield };
-    const tabs = isAdmin ? [...baseTabs, adminTab] : baseTabs;
+    // Filter tabs based on payment status
+    const tabs = (() => {
+        let filtered = [...baseTabs];
+        
+        // If user hasn't paid or subscription expired, hide restricted areas
+        if (isPendingPayment && role !== 'admin') {
+            filtered = baseTabs.filter(tab => 
+                tab.id === 'alljobs' || tab.id === 'profile'
+            );
+        }
+
+        if (isAdmin) {
+            filtered.push(adminTab);
+        }
+        
+        return filtered;
+    })();
 
     const handleTabClick = (tabId) => {
         setActiveTab(tabId);
@@ -208,6 +223,12 @@ const Sidebar = ({ className = "", showHeader = true }) => {
                             {role || localStorage.getItem('userRole') || 'unknown'}
                         </span>
                     </div>
+                    {subscriptionExpired && (
+                        <div className="mt-3 px-3 py-2 bg-red-50 text-red-700 rounded-lg text-xs font-bold border border-red-100 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                            Subscription Expired
+                        </div>
+                    )}
                 </div>
             )}
 

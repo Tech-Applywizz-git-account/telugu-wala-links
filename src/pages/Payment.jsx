@@ -5,8 +5,8 @@ import { CheckCircle, Lock, Loader2, ShieldCheck, ArrowLeft } from 'lucide-react
 import useAuth from '../hooks/useAuth';
 import Navbar from '../components/Navbar';
 
-const AMOUNT = 299; // Standard test amount (₹299)
-const CURRENCY = 'INR';
+const AMOUNT = 1; // Live amount ($1)
+const CURRENCY = 'USD';
 
 const Payment = () => {
     const { role, user, isPendingPayment, isAdmin, refresh, profile, loading } = useAuth();
@@ -57,7 +57,7 @@ const Payment = () => {
 
             // 3. Open Razorpay checkout
             const options = {
-                key: 'rzp_test_SeSnxEHldck9cw', 
+                key: 'rzp_live_SfhioZTqU2QPgO',
                 amount: orderData.amount,
                 currency: orderData.currency,
                 name: 'Telugu Wala Links',
@@ -66,7 +66,7 @@ const Payment = () => {
                 prefill: {
                     email: user?.email || '',
                     contact: profile?.mobile_number || '9999999999',
-                    name: profile?.first_name 
+                    name: profile?.first_name
                         ? `${profile.first_name} ${profile.last_name || ''}`
                         : user?.user_metadata?.first_name || 'Valued Customer'
                 },
@@ -124,7 +124,7 @@ const Payment = () => {
 
             console.log('Final Razorpay Options:', options);
             const rzp = new window.Razorpay(options);
-            
+
             rzp.on('payment.failed', (resp) => {
                 console.error('Payment failed:', resp.error);
                 setErrorMsg(`Payment failed: ${resp.error?.description || 'Unknown error'}`);
@@ -181,8 +181,8 @@ const Payment = () => {
                                 <Lock className="w-5 h-5 text-gray-800" />
                                 <span className="font-bold text-gray-800 text-lg">Unlock Full Access</span>
                             </div>
-                            <div className="text-5xl font-black text-gray-900">$30</div>
-                            <div className="text-gray-700 font-medium">per month • cancel anytime</div>
+                            <div className="text-5xl font-black text-gray-900">$1</div>
+                            <div className="text-gray-700 font-medium">one month access • cancel anytime</div>
                         </div>
 
                         <div className="p-8">
@@ -228,7 +228,7 @@ const Payment = () => {
                                 ) : payStep === 'error' ? (
                                     'Try Again'
                                 ) : (
-                                    <><ShieldCheck className="w-5 h-5" /> Pay $30 with Razorpay</>
+                                    <><ShieldCheck className="w-5 h-5" /> Pay Now</>
                                 )}
                             </button>
 

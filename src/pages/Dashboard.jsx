@@ -706,12 +706,14 @@ const Dashboard = () => {
     }
   }, [loading, user, navigate]);
 
-  // Default pending-payment users to 'alljobs' tab
+  // Default pending-payment users to 'alljobs' tab (FORCE LOCK)
   useEffect(() => {
-    if (!loading && isPendingPayment && !location.state?.initialTab) {
-      setActiveTab('alljobs');
+    if (!loading && isPendingPayment) {
+      if (activeTab === 'overview' || activeTab === 'saved' || activeTab === 'applied') {
+        setActiveTab('alljobs');
+      }
     }
-  }, [loading, isPendingPayment]);
+  }, [loading, isPendingPayment, activeTab]);
 
   // Fetch dashboard data only for paying users (skip heavy queries for teaser)
   useEffect(() => {
@@ -757,7 +759,7 @@ const Dashboard = () => {
   }
 
   // Pending-payment users only see All Jobs + Profile
-  const tabs = isPendingPayment
+  const tabs = isPendingPayment && role !== 'admin'
     ? [
         { id: "alljobs", label: "All Jobs", icon: List },
         { id: "profile", label: "Profile", icon: User },

@@ -261,7 +261,9 @@ const JobCard = ({ job, isSaved = false, isApplied = false, onSaveToggle, onAppl
                             className="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 px-4 py-2.5 rounded-lg text-center font-bold flex justify-center items-center gap-2 shadow-sm transition-all text-gray-900"
                         >
                             <Lock className="w-4 h-4" />
-                            {user ? 'Apply Now (Unlock Access)' : 'Join to Apply'}
+                            {subscriptionExpired 
+                                ? 'Subscription Expired (Renew)' 
+                                : (user ? 'Apply Now (Unlock Access)' : 'Join to Apply')}
                         </button>
                     ) : (
                         <a
