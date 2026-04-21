@@ -14,7 +14,7 @@ const Signup = () => {
         mobileNumber: '',
         countryCode: '1', // Default to 1 (US)
         experience: '',
-        domain: '',
+        // domain: '',
     });
     const [otp, setOtp] = useState('');
     const [otpToken, setOtpToken] = useState('');
@@ -95,7 +95,7 @@ const Signup = () => {
         setLoading(true);
 
         try {
-            if (!formData.firstName || !formData.lastName || !formData.mobileNumber || !formData.experience || !formData.domain) {
+            if (!formData.firstName || !formData.lastName || !formData.mobileNumber || !formData.experience) {
                 throw new Error('Please fill in all required fields.');
             }
 
@@ -123,7 +123,7 @@ const Signup = () => {
             }
 
             console.log('Attempting to create profile for:', authData.user.id);
-            
+
             const profileData = {
                 id: authData.user.id,
                 email: formData.email,
@@ -148,21 +148,21 @@ const Signup = () => {
                 console.log('Retrying with required profile data...');
                 const { error: retryError } = await supabase
                     .from('profiles')
-                    .insert({ 
-                        id: authData.user.id, 
+                    .insert({
+                        id: authData.user.id,
                         email: formData.email,
                         first_name: formData.firstName,
                         last_name: formData.lastName,
                         mobile_number: formData.mobileNumber,
                         country_code: formData.countryCode,
-                        payment_status: 'pending' 
+                        payment_status: 'pending'
                     });
-                
+
                 if (retryError && retryError.code !== '23505') {
                     throw new Error(`Profile creation failed: ${retryError.message}`);
                 }
             }
-            
+
             console.log('✅ Profile step completed');
 
             // Step 3: Send Welcome Email
@@ -225,7 +225,7 @@ const Signup = () => {
                         )}
 
                         <form onSubmit={handleSendOTP} className="space-y-4">
-                             <div>
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
                                 <div className="relative">
                                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -306,8 +306,8 @@ const Signup = () => {
                                     <><span>Verify Code</span><ArrowRight className="w-5 h-5" /></>
                                 )}
                             </button>
-                            
-                            <button 
+
+                            <button
                                 type="button"
                                 onClick={() => setStep(1)}
                                 className="w-full text-sm text-gray-500 hover:text-gray-700 font-medium py-2"
@@ -373,8 +373,8 @@ const Signup = () => {
                                         forceDialCode={true}
                                         value={formData.mobileNumber}
                                         onChange={(phone, meta) => {
-                                            setFormData(prev => ({ 
-                                                ...prev, 
+                                            setFormData(prev => ({
+                                                ...prev,
                                                 mobileNumber: phone,
                                                 countryCode: meta.country.dialCode
                                             }))
@@ -388,7 +388,7 @@ const Signup = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Experience *</label>
                                     <select
@@ -405,7 +405,7 @@ const Signup = () => {
                                         <option value="Senior">Senior (8+ years)</option>
                                     </select>
                                 </div>
-                                <div>
+                                {/* <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Domain *</label>
                                     <input
                                         type="text"
@@ -416,7 +416,7 @@ const Signup = () => {
                                         className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-yellow"
                                         placeholder="e.g. IT, Healthcare"
                                     />
-                                </div>
+                                </div> */}
                             </div>
 
                             <button

@@ -682,7 +682,7 @@ import useAuth from "../hooks/useAuth";
 
 const Dashboard = () => {
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState(location.state?.initialTab || "overview");
+  const [activeTab, setActiveTab] = useState(location.state?.initialTab || "alljobs");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { role, loading, user, signOut, isAdmin, subscriptionExpired, subscriptionEndDate, checkingSub, isPendingPayment } = useAuth();
   const navigate = useNavigate();
@@ -766,8 +766,7 @@ const Dashboard = () => {
       ]
     : [
         { id: "overview", label: "Overview", icon: Search },
-        // All Jobs navigates to homepage (full job links) for paying users
-        { id: "alljobs", label: "All Jobs", icon: List, action: () => navigate('/') },
+        { id: "alljobs", label: "All Jobs", icon: List },
         { id: "saved", label: "Saved Jobs", icon: Heart },
         { id: "applied", label: "Applied Jobs", icon: Briefcase },
         { id: "profile", label: "Profile", icon: User },
@@ -998,6 +997,10 @@ const Dashboard = () => {
 
                 {activeTab === "applied" && (
                   <AppliedJobsTab />
+                )}
+
+                {activeTab === "alljobs" && (
+                  <AllJobsTab />
                 )}
 
                 {activeTab === "profile" && (

@@ -560,8 +560,8 @@ const Login = () => {
             console.log("✅ Login successful! User:", authData.user.email);
             console.log("🔄 Auth context will load role automatically...");
 
-            // Navigate immediately - useAuth context handles role loading via onAuthStateChange
-            navigate("/dashboard", { replace: true });
+            // Navigate immediately to homepage to show all jobs
+            navigate("/", { replace: true });
 
 
         } catch (err) {

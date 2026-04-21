@@ -42,7 +42,6 @@ export default function AdminControls() {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .neq('role', 'admin')  // Exclude admin users
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -134,7 +133,7 @@ export default function AdminControls() {
   const pageStart = (currentPage - 1) * rowsPerPage;
   const paginatedUsers = filtered.slice(pageStart, pageStart + rowsPerPage);
 
-  const paidCount = users.filter(u => u.payment_status === 'completed' || u.has_paid === true).length;
+  const paidCount = users.filter(u => u.payment_status === 'paid' || u.has_paid === true).length;
   const unpaidCount = users.length - paidCount;
 
   return (
@@ -245,12 +244,12 @@ export default function AdminControls() {
                       </td>
                       <td className="px-6 py-4">
                         <span
-                          className={`inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-full ${u.payment_status === 'completed' || u.has_paid
+                          className={`inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-full ${u.payment_status === 'paid' || u.has_paid
                             ? 'bg-green-100 text-green-700'
                             : 'bg-yellow-100 text-yellow-700'
                             }`}
                         >
-                          {u.payment_status === 'completed' || u.has_paid ? 'Completed' : 'Pending'}
+                          {u.payment_status === 'paid' || u.has_paid ? 'Paid' : 'Pending'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right text-gray-500 whitespace-nowrap">

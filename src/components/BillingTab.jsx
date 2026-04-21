@@ -72,13 +72,13 @@ const BillingTab = () => {
             // Calculate statistics
             if (data && data.length > 0) {
                 const totalAmount = data
-                    .filter(p => p.status === 'COMPLETED' || p.status === 'completed')
+                    .filter(p => p.status === 'COMPLETED' || p.status === 'completed' || p.status === 'PAID' || p.status === 'paid')
                     .reduce((sum, p) => sum + parseFloat(p.amount), 0);
 
                 console.log('💰 Total Spent Calculated:', totalAmount);
 
                 const successfulWithFilter = data.filter(
-                    p => p.status === 'COMPLETED' || p.status === 'completed'
+                    p => p.status === 'COMPLETED' || p.status === 'completed' || p.status === 'PAID' || p.status === 'paid'
                 ).length;
 
                 setStats({
@@ -106,11 +106,11 @@ const BillingTab = () => {
     const getStatusBadge = (status) => {
         const statusUpper = status?.toUpperCase();
 
-        if (statusUpper === 'COMPLETED') {
+        if (statusUpper === 'COMPLETED' || statusUpper === 'PAID') {
             return (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
                     <CheckCircle className="w-3.5 h-3.5" />
-                    Completed
+                    Paid
                 </span>
             );
         } else if (statusUpper === 'PENDING') {

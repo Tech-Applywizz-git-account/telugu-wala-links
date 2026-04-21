@@ -43,7 +43,7 @@ const AdminOverview = () => {
             const { data: payments } = await supabase
                 .from('payment_details')
                 .select('amount, status')
-                .eq('status', 'COMPLETED'); // Assuming 'COMPLETED' is the success status
+                .or('status.eq.COMPLETED,status.eq.PAID,status.eq.paid'); // Include PAID status
 
             const totalRevenue = payments?.reduce((sum, p) => sum + Number(p.amount || 0), 0) || 0;
 
@@ -58,7 +58,7 @@ const AdminOverview = () => {
             const { data: recentPayments } = await supabase
                 .from('payment_details')
                 .select('email, amount, created_at')
-                .eq('status', 'COMPLETED')
+                .or('status.eq.COMPLETED,status.eq.PAID,status.eq.paid')
                 .order('created_at', { ascending: false })
                 .limit(5);
 
